@@ -1,0 +1,54 @@
+{
+  "id": "saturn-v",
+  "name": "Saturn V",
+  "description": "The Apollo Moon rocket, set up like Apollo 11 (AS-506): five F-1s, five J-2s, then one J-2 on the S-IVB.",
+  "launchSite": "KSC",
+  "stages": [
+    {
+      "name": "S-IC",
+      "color": "#f4f6fa",
+      "parts": [
+        { "part": "f-1", "count": 5 },
+        { "part": "s-ic-tankage" },
+        { "part": "s-ic-s-ii-interstage" }
+      ]
+    },
+    {
+      "name": "S-II",
+      "color": "#f4f6fa",
+      "parts": [
+        { "part": "j-2", "count": 5 },
+        { "part": "s-ii-tankage" },
+        { "part": "s-ii-s-ivb-interstage" }
+      ]
+    },
+    {
+      "name": "S-IVB",
+      "color": "#f4f6fa",
+      "parts": [
+        { "part": "j-2", "count": 1 },
+        { "part": "s-ivb-tankage" },
+        { "part": "saturn-instrument-unit", "color": "#2b2f36" }
+      ]
+    }
+  ],
+  "payload": {
+    "name": "Apollo spacecraft",
+    "parts": [
+      { "part": "apollo-sla", "color": "#dfe5ee" },
+      { "part": "apollo-lm" },
+      { "part": "apollo-sm", "color": "#dfe5ee" },
+      { "part": "apollo-cm", "color": "#c9d1dc" },
+      { "part": "apollo-les", "color": "#f4f6fa" }
+    ]
+  },
+  "mission": {
+    "target": "moon",
+    "targetOrbitAltitudeM": 185000,
+    "pitchKick": { "timeS": 16, "angleDeg": 1 }
+  },
+  "notes": [
+    "Apollo 11 reference: max-Q at T+83 s (~35 kPa, 13.5 km); S-IC cutoff at T+162 s; orbit insertion at T+710 s into a ~185 km parking orbit.",
+    "The early centre-engine cutoff on the S-IC and S-II is not modelled yet."
+  ]
+}

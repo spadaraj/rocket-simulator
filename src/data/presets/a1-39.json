@@ -1,0 +1,51 @@
+{
+  "id": "a1-39",
+  "name": "A1-39",
+  "description": "Roscoe's lunar launch vehicle: four white SLS-style boosters, a gray methane core with fins and landing legs, a red methane second stage, and the lunar stack.",
+  "launchSite": "KSC",
+  "stages": [
+    {
+      "name": "Core stage",
+      "color": "#8e99a8",
+      "parts": [
+        { "part": "raptor-2", "count": 9 },
+        { "part": "a139-core-engine-section" },
+        { "part": "a139-core-tank" },
+        { "part": "a139-interstage" },
+        { "part": "a139-fin", "count": 4 },
+        { "part": "a139-landing-leg", "count": 4 }
+      ],
+      "boosters": { "part": "srb-sls-5seg", "count": 4, "separate": "onBurnout", "color": "#f4f6fa" },
+      "recovery": "propulsive"
+    },
+    {
+      "name": "Stage 2",
+      "color": "#d63a3a",
+      "parts": [
+        { "part": "raptor-vacuum", "count": 1 },
+        { "part": "a139-stage2-skirt" },
+        { "part": "a139-stage2-tank" }
+      ]
+    }
+  ],
+  "payload": {
+    "name": "Lunar stack",
+    "parts": [
+      { "part": "a139-lm-adapter", "color": "#dfe5ee" },
+      { "part": "apollo-lm" },
+      { "part": "a139-service-module", "color": "#f4f6fa" },
+      { "part": "a139-command-module", "color": "#c9d1dc" },
+      { "part": "a139-escape-tower", "color": "#f4f6fa" }
+    ]
+  },
+  "mission": {
+    "target": "moon",
+    "targetOrbitAltitudeM": 200000,
+    "pitchKick": { "timeS": 12, "angleDeg": 1.5 }
+  },
+  "notes": [
+    "Layout from Roscoe's blueprint (A1-39-001). Dimensions from the blueprint; masses are free-design estimates.",
+    "Defaults chosen for Roscoe's open decisions: Raptor 2 core engines, SLS boosters, one Raptor Vacuum on the red stage, fins on the core.",
+    "Nine core engines: the drawing shows about five, but the sim needs more to lift a full core."
+  ]
+}
