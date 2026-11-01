@@ -13,7 +13,7 @@ npm test         # physics sanity tests + preset flights
 npm run build    # static site in dist/
 ```
 
-Every push to `main` runs the tests and deploys to GitHub Pages (`.github/workflows/deploy.yml`).
+Every push to `main` runs the tests and build on GitHub Actions. Deploying to GitHub Pages is switched off until hosting is set up (the repo is private); set the repository variable `DEPLOY_PAGES=true` to turn it on.
 
 ## How it's built
 

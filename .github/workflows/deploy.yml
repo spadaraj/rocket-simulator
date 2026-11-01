@@ -28,12 +28,14 @@ jobs:
       - run: npm test
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && vars.DEPLOY_PAGES == 'true'
         with:
           path: dist
 
+  # Pages needs a public repo (or a paid plan for private ones). Turn on with the
+  # repository variable DEPLOY_PAGES=true once hosting is available.
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_PAGES == 'true'
     needs: build
     runs-on: ubuntu-latest
     environment:
