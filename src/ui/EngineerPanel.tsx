@@ -1,28 +1,16 @@
 // Engineer mode: numeric gauges, propellant, design check, quick tweaks, event log.
 
 import { LEO_BUDGET_MS, TLI_BUDGET_MS, type StageDeltaV } from '../physics/deltaV';
-import type { FlightRecord, Sample } from '../physics/types';
+import type { FlightRecord, MissionSpec, Sample } from '../physics/types';
 import type { Vehicle } from '../physics/vehicle';
-
-export interface Tweaks {
-  coreEngines: number;
-  boosterCount: number;
-  boosterPart: string;
-  kickTimeS: number;
-  kickAngleDeg: number;
-  targetAltKm: number;
-  maxQThrottle: number; // 1 = off
-}
 
 interface Props {
   record: FlightRecord;
   vehicle: Vehicle;
   sample: Sample;
   deltaV: StageDeltaV[];
-  tweaks: Tweaks;
-  setTweaks: (t: Tweaks) => void;
-  canTweakCore: boolean;
-  canTweakBoosters: boolean;
+  mission: MissionSpec;
+  setMission: (patch: Partial<MissionSpec>) => void;
   onSeek: (t: number) => void;
 }
 
@@ -75,8 +63,7 @@ export function EngineerPanel(p: Props) {
   const { sample: s, record, vehicle } = p;
   const stage = vehicle.stages[s.stageIndex];
   const totalDv = p.deltaV.reduce((a, d) => a + d.deltaVMS, 0);
-  const t = p.tweaks;
-  const set = (patch: Partial<Tweaks>) => p.setTweaks({ ...t, ...patch });
+  const m = p.mission;
 
   return (
     <div className="engineer-panel">
@@ -162,33 +149,42 @@ export function EngineerPanel(p: Props) {
       </section>
 
       <section>
-        <h4>Quick tweaks</h4>
-        {p.canTweakCore && (
-          <Slider label="Core engines" value={t.coreEngines} min={0} max={20} step={1} onChange={(v) => set({ coreEngines: v })} />
-        )}
-        {p.canTweakBoosters && (
-          <>
-            <Slider label="Boosters" value={t.boosterCount} min={0} max={6} step={2} onChange={(v) => set({ boosterCount: v })} />
-            <label className="select-row">
-              <span>Booster type</span>
-              <select value={t.boosterPart} onChange={(e) => set({ boosterPart: e.target.value })}>
-                <option value="srb-sls-5seg">SLS five-segment</option>
-                <option value="srb-shuttle">Space Shuttle SRB</option>
-              </select>
-            </label>
-          </>
-        )}
-        <Slider label="Pitch kick time" value={t.kickTimeS} min={4} max={30} step={1} unit=" s" onChange={(v) => set({ kickTimeS: v })} />
-        <Slider label="Pitch kick angle" value={t.kickAngleDeg} min={0.25} max={5} step={0.25} unit="°" onChange={(v) => set({ kickAngleDeg: v })} />
-        <Slider label="Target orbit" value={t.targetAltKm} min={150} max={400} step={10} unit=" km" onChange={(v) => set({ targetAltKm: v })} />
+        <h4>Flight settings</h4>
+        <Slider
+          label="Pitch kick time"
+          value={m.pitchKick.timeS}
+          min={4}
+          max={30}
+          step={1}
+          unit=" s"
+          onChange={(v) => p.setMission({ pitchKick: { ...m.pitchKick, timeS: v } })}
+        />
+        <Slider
+          label="Pitch kick angle"
+          value={m.pitchKick.angleDeg}
+          min={0.25}
+          max={5}
+          step={0.25}
+          unit="°"
+          onChange={(v) => p.setMission({ pitchKick: { ...m.pitchKick, angleDeg: v } })}
+        />
+        <Slider
+          label="Target orbit"
+          value={m.targetOrbitAltitudeM / 1000}
+          min={150}
+          max={400}
+          step={10}
+          unit=" km"
+          onChange={(v) => p.setMission({ targetOrbitAltitudeM: v * 1000 })}
+        />
         <Slider
           label="Max-Q throttle"
-          value={Math.round(t.maxQThrottle * 100)}
+          value={Math.round((m.maxQThrottle?.throttle ?? 1) * 100)}
           min={40}
           max={100}
           step={5}
           unit="%"
-          onChange={(v) => set({ maxQThrottle: v / 100 })}
+          onChange={(v) => p.setMission({ maxQThrottle: v < 100 ? { aboveQPa: 20000, throttle: v / 100 } : undefined })}
         />
       </section>
 

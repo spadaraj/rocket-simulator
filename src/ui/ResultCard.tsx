@@ -1,5 +1,12 @@
+import type { FixResult } from '../physics/fixes';
 import type { Feedback } from './messages';
 import { canSpeak, speak } from './speech';
+
+export interface FixState {
+  status: 'working' | 'done';
+  fixes: FixResult[];
+  tested: number;
+}
 
 function Face({ happy }: { happy: boolean }) {
   return (
@@ -23,39 +30,87 @@ function Face({ happy }: { happy: boolean }) {
   );
 }
 
-export function RoscoeResult({ fb, onAgain }: { fb: Feedback; onAgain: () => void }) {
-  const text = `${fb.roscoeTitle} ${fb.roscoeFix}`;
+interface CardProps {
+  fb: Feedback;
+  fix?: FixState;
+  onAgain: () => void;
+  onTryFix: (f: FixResult) => void;
+}
+
+export function RoscoeResult({ fb, fix, onAgain, onTryFix }: CardProps) {
+  const best = fix?.status === 'done' ? fix.fixes[0] : undefined;
+  const tip = best ? `Try this: ${best.roscoe.toLowerCase()}.` : fb.roscoeFix;
   return (
     <div className={`result-card roscoe ${fb.success ? 'win' : 'lose'}`}>
       <Face happy={fb.success} />
-      <h2>{fb.success ? '🏆 ' : ''}{fb.roscoeTitle}</h2>
-      <p className="result-fix">{fb.roscoeFix}</p>
+      <h2>
+        {fb.success ? '🏆 ' : ''}
+        {fb.roscoeTitle}
+      </h2>
+      <p className="result-fix">{fix?.status === 'working' ? '🔧 Thinking of a fix…' : tip}</p>
       <div className="result-actions">
         {canSpeak && (
-          <button className="btn big" onClick={() => speak(text)} aria-label="Read aloud">
+          <button className="btn big" onClick={() => speak(`${fb.roscoeTitle} ${tip}`)} aria-label="Read aloud">
             🔊 Read to me
           </button>
         )}
-        <button className="btn big primary" onClick={onAgain}>
-          🚀 Fly again
-        </button>
+        {best ? (
+          <button className="btn big primary" onClick={() => onTryFix(best)}>
+            🔧 Try this fix
+          </button>
+        ) : (
+          <button className="btn big primary" onClick={onAgain}>
+            🚀 Fly again
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-export function EngineerResult({ fb, onAgain }: { fb: Feedback; onAgain: () => void }) {
+export function EngineerResult({ fb, fix, onAgain, onTryFix }: CardProps) {
   return (
     <div className={`result-card engineer ${fb.success ? 'win' : 'lose'}`}>
       <div className="result-kicker">{fb.success ? 'Mission result' : 'Failure'}</div>
       <h3>{fb.title}</h3>
       <p>{fb.why}</p>
-      <ul>
-        {fb.fixes.map((f) => (
-          <li key={f}>{f}</li>
-        ))}
-      </ul>
-      <button className="btn" onClick={onAgain}>
+      {fb.success || !fix ? (
+        <ul>
+          {fb.fixes.map((f) => (
+            <li key={f}>{f}</li>
+          ))}
+        </ul>
+      ) : fix.status === 'working' ? (
+        <p className="muted">Re-flying candidate fixes…</p>
+      ) : (
+        <>
+          <p className="muted">
+            Tested {fix.tested} fixes by re-flying; {fix.fixes.length ? `${fix.fixes.length} reached orbit` : 'none reached orbit on its own'}.
+          </p>
+          {fix.fixes.length ? (
+            <ul className="fix-list">
+              {fix.fixes.map((f) => (
+                <li key={f.id}>
+                  <span>
+                    {f.title}
+                    <span className="muted"> → {(f.perigeeAltM / 1000).toFixed(0)} km orbit, {f.remainingDeltaVMS.toFixed(0)} m/s left</span>
+                  </span>
+                  <button className="btn small" onClick={() => onTryFix(f)}>
+                    Try this
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul>
+              {fb.fixes.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      <button className="btn small" onClick={onAgain}>
         Replay
       </button>
     </div>

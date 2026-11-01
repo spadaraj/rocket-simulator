@@ -1,21 +1,28 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { catalog, presets } from './data/catalog';
 import { stageDeltaV } from './physics/deltaV';
+import { setMission } from './physics/edit';
+import type { FixResult } from './physics/fixes';
 import { simulate } from './physics/simulate';
 import type { RocketSpec } from './physics/types';
 import { buildVehicle } from './physics/vehicle';
+import { Charts, RUN_COLORS, type Run } from './ui/Charts';
 import { Countdown } from './ui/Countdown';
-import { EngineerPanel, type Tweaks } from './ui/EngineerPanel';
+import { EngineerBuilder } from './ui/EngineerBuilder';
+import { EngineerPanel } from './ui/EngineerPanel';
 import { FlightCanvas } from './ui/FlightCanvas';
 import { feedbackFor } from './ui/messages';
 import { sampleAt, usePlayback } from './ui/playback';
-import { EngineerResult, RoscoeResult } from './ui/ResultCard';
+import { EngineerResult, RoscoeResult, type FixState } from './ui/ResultCard';
 import { RocketThumb } from './ui/RocketThumb';
+import { RoscoeBuilder } from './ui/RoscoeBuilder';
 import { RoscoeDials } from './ui/RoscoeDials';
 import { StageStrip } from './ui/StageStrip';
+import { autoSizeAsync, findFixesAsync } from './ui/whatIf';
 
 type Mode = 'roscoe' | 'engineer';
 type Phase = 'ready' | 'countdown' | 'flying' | 'done';
+type Tab = 'build' | 'fly' | 'charts';
 
 const ROSCOE_SPEEDS = [
   { label: '🐢', speed: 3, title: 'Slow' },
@@ -32,56 +39,24 @@ function loadMode(): Mode {
   }
 }
 
-function coreEngineRef(spec: RocketSpec) {
-  return spec.stages[0]?.parts.find((p) => catalog[p.part]?.type === 'liquidEngine');
-}
-
-function defaultTweaks(spec: RocketSpec): Tweaks {
-  const b = spec.stages[0]?.boosters;
-  return {
-    coreEngines: coreEngineRef(spec)?.count ?? 1,
-    boosterCount: b?.count ?? 0,
-    boosterPart: b?.part ?? 'srb-sls-5seg',
-    kickTimeS: spec.mission.pitchKick.timeS,
-    kickAngleDeg: spec.mission.pitchKick.angleDeg,
-    targetAltKm: spec.mission.targetOrbitAltitudeM / 1000,
-    maxQThrottle: spec.mission.maxQThrottle?.throttle ?? 1,
-  };
-}
-
-function applyTweaks(spec: RocketSpec, t: Tweaks): RocketSpec {
-  const engine = coreEngineRef(spec);
-  const stages = spec.stages.map((s, i) => {
-    if (i !== 0) return s;
-    const parts = s.parts.map((p) => (p === engine ? { ...p, count: t.coreEngines } : p));
-    const boosters =
-      t.boosterCount > 0
-        ? { part: t.boosterPart, count: t.boosterCount, separate: 'onBurnout' as const, color: '#f4f6fa' }
-        : undefined;
-    return { ...s, parts, boosters };
-  });
-  return {
-    ...spec,
-    stages,
-    mission: {
-      ...spec.mission,
-      pitchKick: { timeS: t.kickTimeS, angleDeg: t.kickAngleDeg },
-      targetOrbitAltitudeM: t.targetAltKm * 1000,
-      maxQThrottle: t.maxQThrottle < 1 ? { aboveQPa: 20000, throttle: t.maxQThrottle } : undefined,
-    },
-  };
-}
-
 export default function App() {
   const [mode, setModeState] = useState<Mode>(loadMode);
   const [presetId, setPresetId] = useState(presets[0].id);
   const preset = presets.find((p) => p.id === presetId)!;
-  const [tweaks, setTweaks] = useState<Tweaks>(() => defaultTweaks(preset));
+  const [spec, setSpec] = useState<RocketSpec>(preset);
+  const [tab, setTab] = useState<Tab>('fly');
   const [phase, setPhase] = useState<Phase>('ready');
+  const [fix, setFix] = useState<FixState | undefined>();
+  const [autoSizing, setAutoSizing] = useState(false);
+  const [autoMessage, setAutoMessage] = useState<string | null>(null);
+  const [saved, setSaved] = useState<Run[]>([]);
+  const runId = useRef(1);
   const roscoe = mode === 'roscoe';
+  const modified = spec !== preset;
 
   const setMode = (m: Mode) => {
     setModeState(m);
+    if (m === 'roscoe' && tab === 'charts') setTab('fly');
     try {
       localStorage.setItem('mode', m);
     } catch {
@@ -89,7 +64,6 @@ export default function App() {
     }
   };
 
-  const spec = useMemo(() => applyTweaks(preset, tweaks), [preset, tweaks]);
   const vehicle = useMemo(() => buildVehicle(spec, catalog), [spec]);
   const record = useMemo(() => simulate(spec, catalog), [spec]);
   const deltaV = useMemo(() => stageDeltaV(spec, catalog), [spec]);
@@ -97,18 +71,36 @@ export default function App() {
   const feedback = useMemo(() => feedbackFor(record), [record]);
   const pb = usePlayback(record, 10);
   const sample = sampleAt(record.samples, pb.t);
+  const current: Run = useMemo(
+    () => ({ id: 0, label: spec.name, color: RUN_COLORS[0], record }),
+    [record, spec.name],
+  );
 
   const choosePreset = (id: string) => {
     const p = presets.find((x) => x.id === id)!;
     setPresetId(id);
-    setTweaks(defaultTweaks(p));
-    setPhase('ready');
+    setSpec(p);
+    setAutoMessage(null);
   };
 
-  // A changed design means a new flight: back to the pad.
+  // A changed design means a new flight: back to the pad, and start looking for fixes
+  // right away so they are ready when the failure card appears.
   useEffect(() => {
     setPhase('ready');
-  }, [record]);
+    const failure = record.outcome.failure;
+    if (!failure) {
+      setFix(undefined);
+      return;
+    }
+    let live = true;
+    setFix({ status: 'working', fixes: [], tested: 0 });
+    findFixesAsync(spec, failure.type).then((r) => {
+      if (live) setFix({ status: 'done', ...r });
+    });
+    return () => {
+      live = false;
+    };
+  }, [record]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (phase === 'flying' && !pb.playing && pb.t >= record.durationS) setPhase('done');
@@ -131,10 +123,40 @@ export default function App() {
     setPhase('ready');
   };
 
+  const tryFix = (f: FixResult) => {
+    setSpec(f.spec);
+    setTab('fly');
+  };
+
+  const autoSize = () => {
+    setAutoSizing(true);
+    setAutoMessage(null);
+    autoSizeAsync(spec).then((r) => {
+      setAutoSizing(false);
+      setAutoMessage(r.message);
+      if (r.ok) setSpec(r.spec);
+    });
+  };
+
+  const saveRun = () => {
+    // Colour follows the run for its whole life; slot 0 is always "this flight".
+    const used = new Set(saved.map((r) => r.color));
+    const color = RUN_COLORS.slice(1).find((c) => !used.has(c));
+    if (!color) return;
+    const n = runId.current++;
+    setSaved([...saved, { id: n, label: `${spec.name}${modified ? ' (modified)' : ''} #${n}`, color, record }]);
+  };
+
   const speeds = roscoe ? ROSCOE_SPEEDS.map((s) => s.speed) : ENGINEER_SPEEDS;
   useEffect(() => {
     if (!speeds.includes(pb.speed)) pb.setSpeed(10);
   }, [roscoe]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'build', label: roscoe ? '🔧 Build' : 'Build' },
+    { id: 'fly', label: roscoe ? '🚀 Fly' : 'Fly' },
+    ...(roscoe ? [] : [{ id: 'charts' as Tab, label: 'Charts' }]),
+  ];
 
   return (
     <div className={`app ${mode}`}>
@@ -151,11 +173,21 @@ export default function App() {
               onClick={() => choosePreset(p.id)}
               title={p.description}
             >
-              <RocketThumb vehicle={thumbs[p.id]} height={roscoe ? 60 : 40} />
-              <span>{p.name}</span>
+              <RocketThumb vehicle={p.id === presetId ? vehicle : thumbs[p.id]} height={roscoe ? 60 : 40} />
+              <span>
+                {p.name}
+                {p.id === presetId && modified && <em className="modified"> (modified)</em>}
+              </span>
             </button>
           ))}
         </nav>
+        <div className="tabs" role="tablist" aria-label="Screen">
+          {tabs.map((t) => (
+            <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
         <div className="mode-toggle" role="group" aria-label="Mode">
           <button className={roscoe ? 'on' : ''} onClick={() => setMode('roscoe')}>
             Roscoe
@@ -166,92 +198,135 @@ export default function App() {
         </div>
       </header>
 
-      <main className="stage">
-        <div className="view">
-          <FlightCanvas record={record} vehicle={vehicle} tRef={pb.tRef} launchSite={spec.launchSite}
-            roscoe={roscoe}
-            armed={phase === 'flying' || phase === 'done'}
-          />
-
-          {roscoe && <StageStrip
+      {tab === 'build' && (
+        <main className="stage scroll">
+          {roscoe ? (
+            <RoscoeBuilder
+              spec={spec}
+              setSpec={setSpec}
               vehicle={vehicle}
-              sample={sample}
-              started={phase !== 'ready' && phase !== 'countdown'}
-              live={phase === 'flying' && pb.t < record.durationS}
-            />}
-          {roscoe && phase !== 'ready' && <RoscoeDials sample={sample} />}
-
-          {phase === 'ready' && (
-            <div className="launch-wrap">
-              <button className="launch-btn" onClick={launch}>
-                LAUNCH
-              </button>
-            </div>
+              deltaV={deltaV}
+              liftoffTWR={record.summary.liftoffTWR}
+              autoSizing={autoSizing}
+              autoMessage={autoMessage}
+              onAutoSize={autoSize}
+              onReset={() => setSpec(preset)}
+              onFly={() => setTab('fly')}
+            />
+          ) : (
+            <EngineerBuilder
+              spec={spec}
+              setSpec={setSpec}
+              vehicle={vehicle}
+              deltaV={deltaV}
+              liftoffTWR={record.summary.liftoffTWR}
+              autoSizing={autoSizing}
+              autoMessage={autoMessage}
+              onAutoSize={autoSize}
+              onReset={() => setSpec(preset)}
+            />
           )}
+        </main>
+      )}
 
-          {phase === 'countdown' && <Countdown from={10} onDone={startFlight} voice={roscoe} />}
+      {tab === 'charts' && (
+        <main className="stage scroll">
+          <Charts current={current} saved={saved} onSave={saveRun} onRemove={(id) => setSaved(saved.filter((r) => r.id !== id))} />
+        </main>
+      )}
 
-          {phase === 'done' && roscoe && <RoscoeResult fb={feedback} onAgain={again} />}
-
-          {phase !== 'ready' && phase !== 'countdown' && (
-            <div className="controls">
-              <button className="btn" onClick={pb.playing ? pb.pause : pb.play} aria-label={pb.playing ? 'Pause' : 'Play'}>
-                {pb.playing ? '⏸' : '▶'}
-              </button>
-              {roscoe
-                ? ROSCOE_SPEEDS.map((s) => (
-                    <button
-                      key={s.speed}
-                      className={`btn ${pb.speed === s.speed ? 'on' : ''}`}
-                      onClick={() => pb.setSpeed(s.speed)}
-                      title={s.title}
-                    >
-                      {s.label}
-                    </button>
-                  ))
-                : ENGINEER_SPEEDS.map((sp) => (
-                    <button key={sp} className={`btn small ${pb.speed === sp ? 'on' : ''}`} onClick={() => pb.setSpeed(sp)}>
-                      {sp}×
-                    </button>
-                  ))}
-              <input
-                className="scrubber"
-                type="range"
-                min={0}
-                max={record.durationS}
-                step={0.1}
-                value={pb.t}
-                onChange={(e) => {
-                  pb.seek(Number(e.target.value));
-                  if (phase === 'done') setPhase('flying');
-                }}
-                aria-label="Flight time"
-              />
-              {!roscoe && <span className="mono time">T+{pb.t.toFixed(0)} s</span>}
-            </div>
-          )}
-        </div>
-
-        {!roscoe && (
-          <aside className="side">
-            {phase === 'done' && <EngineerResult fb={feedback} onAgain={launch} />}
-            <EngineerPanel
+      {tab === 'fly' && (
+        <main className="stage">
+          <div className="view">
+            <FlightCanvas
               record={record}
               vehicle={vehicle}
-              sample={sample}
-              deltaV={deltaV}
-              tweaks={tweaks}
-              setTweaks={setTweaks}
-              canTweakCore={!!coreEngineRef(preset)}
-              canTweakBoosters
-              onSeek={(t) => {
-                if (phase === 'ready' || phase === 'countdown') setPhase('flying');
-                pb.seek(t);
-              }}
+              tRef={pb.tRef}
+              launchSite={spec.launchSite}
+              roscoe={roscoe}
+              armed={phase === 'flying' || phase === 'done'}
             />
-          </aside>
-        )}
-      </main>
+
+            {roscoe && (
+              <StageStrip
+                vehicle={vehicle}
+                sample={sample}
+                started={phase !== 'ready' && phase !== 'countdown'}
+                live={phase === 'flying' && pb.t < record.durationS}
+              />
+            )}
+            {roscoe && phase !== 'ready' && <RoscoeDials sample={sample} />}
+
+            {phase === 'ready' && (
+              <div className="launch-wrap">
+                <button className="launch-btn" onClick={launch}>
+                  LAUNCH
+                </button>
+              </div>
+            )}
+
+            {phase === 'countdown' && <Countdown from={10} onDone={startFlight} voice={roscoe} />}
+
+            {phase === 'done' && roscoe && <RoscoeResult fb={feedback} fix={fix} onAgain={again} onTryFix={tryFix} />}
+
+            {phase !== 'ready' && phase !== 'countdown' && (
+              <div className="controls">
+                <button className="btn" onClick={pb.playing ? pb.pause : pb.play} aria-label={pb.playing ? 'Pause' : 'Play'}>
+                  {pb.playing ? '⏸' : '▶'}
+                </button>
+                {roscoe
+                  ? ROSCOE_SPEEDS.map((s) => (
+                      <button
+                        key={s.speed}
+                        className={`btn ${pb.speed === s.speed ? 'on' : ''}`}
+                        onClick={() => pb.setSpeed(s.speed)}
+                        title={s.title}
+                      >
+                        {s.label}
+                      </button>
+                    ))
+                  : ENGINEER_SPEEDS.map((sp) => (
+                      <button key={sp} className={`btn small ${pb.speed === sp ? 'on' : ''}`} onClick={() => pb.setSpeed(sp)}>
+                        {sp}×
+                      </button>
+                    ))}
+                <input
+                  className="scrubber"
+                  type="range"
+                  min={0}
+                  max={record.durationS}
+                  step={0.1}
+                  value={pb.t}
+                  onChange={(e) => {
+                    pb.seek(Number(e.target.value));
+                    if (phase === 'done') setPhase('flying');
+                  }}
+                  aria-label="Flight time"
+                />
+                {!roscoe && <span className="mono time">T+{pb.t.toFixed(0)} s</span>}
+              </div>
+            )}
+          </div>
+
+          {!roscoe && (
+            <aside className="side">
+              {phase === 'done' && <EngineerResult fb={feedback} fix={fix} onAgain={launch} onTryFix={tryFix} />}
+              <EngineerPanel
+                record={record}
+                vehicle={vehicle}
+                sample={sample}
+                deltaV={deltaV}
+                mission={spec.mission}
+                setMission={(patch) => setSpec(setMission(spec, patch))}
+                onSeek={(t) => {
+                  if (phase === 'ready' || phase === 'countdown') setPhase('flying');
+                  pb.seek(t);
+                }}
+              />
+            </aside>
+          )}
+        </main>
+      )}
     </div>
   );
 }

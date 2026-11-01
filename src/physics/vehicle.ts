@@ -78,6 +78,12 @@ export interface Vehicle {
   maxDiameterM: number;
 }
 
+/** The shared catalog plus this rocket's own free-design parts. */
+export function resolveCatalog(spec: RocketSpec, catalog: Catalog): Catalog {
+  if (!spec.customParts?.length) return catalog;
+  return { ...catalog, ...Object.fromEntries(spec.customParts.map((p) => [p.id, p])) };
+}
+
 function lookup(catalog: Catalog, id: string): Part {
   const part = catalog[id];
   if (!part) throw new Error(`Unknown part "${id}"`);
@@ -127,7 +133,8 @@ function partShape(part: Part): Shape {
   return 'cylinder';
 }
 
-export function buildVehicle(spec: RocketSpec, catalog: Catalog): Vehicle {
+export function buildVehicle(spec: RocketSpec, baseCatalog: Catalog): Vehicle {
+  const catalog = resolveCatalog(spec, baseCatalog);
   const segments: Segment[] = [];
   const fins: FinSet[] = [];
 

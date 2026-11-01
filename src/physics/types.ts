@@ -123,6 +123,8 @@ export interface RocketSpec {
   /** Sits on top of the last stage. Bottom to top. */
   payload: { name: string; parts: PartRef[] };
   mission: MissionSpec;
+  /** Parts designed for this rocket (free-design tanks), layered over the catalog. */
+  customParts?: Part[];
   notes?: string[];
 }
 

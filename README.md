@@ -2,7 +2,10 @@
 
 A browser-based 2D rocket engineering sandbox. Pick a rocket, launch it, and watch a physically grounded flight with live gauges. If it fails, the app explains what went wrong and how to fix it. The full design is in [PLAN.md](PLAN.md); Roscoe's blueprint is in [docs/a1-39-blueprint.png](docs/a1-39-blueprint.png).
 
-**Phase 1 (this build):** physics engine, A1-39 and Saturn V presets, launch to Earth orbit, three failure types, Roscoe mode and a basic Engineer mode.
+**Done so far:**
+
+- **Phase 1:** physics engine, A1-39 and Saturn V presets, launch to Earth orbit, failure explanations, Roscoe mode and a basic Engineer mode.
+- **Phase 2:** rocket builder (swap engines and boosters, resize tanks, add or remove stages) in both modes; "Make it reach the Moon" auto-size; Engineer charts with run comparison and CSV export; fix suggestions that are tested by re-flying the rocket.
 
 ## Run it
 
@@ -19,6 +22,8 @@ Every push to `main` runs the tests and build on GitHub Actions. Deploying to Gi
 
 - `src/physics/` is a pure TypeScript module with no UI imports. `simulate(spec, catalog)` takes a `RocketSpec` and returns a `FlightRecord` (time series, events, outcome). SI units throughout.
 - The whole flight is simulated up front (in about 50–130 ms), then the canvas plays it back. That's why pause, scrubbing and speed controls are free.
+- Auto-size and fix suggestions fly the rocket many times (`src/physics/autosize.ts`, `src/physics/fixes.ts`); the app runs them in a Web Worker so the screen never freezes.
+- Free-design tanks (`src/physics/design.ts`) get their propellant from volume × propellant density and are badged "estimate".
 - `src/data/parts.json` is the parts catalog; every part has a `source` and a `confidence` (`published` or `estimate`). Presets are in `src/data/presets/`.
 
 ### Physics (Phase 1)
@@ -50,4 +55,5 @@ The Layer 2 golden-flight scorecard comes in Phase 4.
 ```bash
 npx vite-node scripts/fly.ts a1-39        # flight report for a preset
 npx vite-node scripts/sweep.ts saturn-v   # pitch-kick sweep
+npx vite-node scripts/whatif.ts a1-39-as-drawn  # auto-size and fix search
 ```

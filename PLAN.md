@@ -265,20 +265,20 @@ This weekend's goal: Roscoe presses Launch on a rough A1-39 and watches it fly t
 
 **Phase 1: this weekend (MVP)**
 
-- [ ] Physics engine: gravity, standard atmosphere, altitude-aware thrust, drag, staging, gravity turn
-- [ ] Small catalog: 2 methane engines, 2 solid boosters, tanks, fins, crew modules
-- [ ] A1-39 and Saturn V presets, launch to Earth orbit
-- [ ] 2D flight animation with playback controls and live gauges
-- [ ] Failures: won't lift off, out of fuel, breaks apart at max-Q
-- [ ] Basic Roscoe mode: launch button, cartoon dials, failure card
-- [ ] Physics sanity tests passing; deployed to a shareable link
+- [x] Physics engine: gravity, standard atmosphere, altitude-aware thrust, drag, staging, gravity turn
+- [x] Small catalog: 2 methane engines, 2 solid boosters, tanks, fins, crew modules
+- [x] A1-39 and Saturn V presets, launch to Earth orbit
+- [x] 2D flight animation with playback controls and live gauges
+- [x] Failures: won't lift off, out of fuel, breaks apart at max-Q
+- [x] Basic Roscoe mode: launch button, cartoon dials, failure card
+- [x] Physics sanity tests passing; deployed to a shareable link
 
 **Phase 2: building and swapping**
 
-- [ ] Rocket builder with part swapping and stage add/remove
-- [ ] Delta-v readout per stage and the auto-size helper
-- [ ] Engineer mode charts and run comparison
-- [ ] Fix suggestions via automatic what-if re-runs
+- [x] Rocket builder with part swapping and stage add/remove
+- [x] Delta-v readout per stage and the auto-size helper
+- [x] Engineer mode charts and run comparison
+- [x] Fix suggestions via automatic what-if re-runs
 
 **Phase 3: the full mission**
 
