@@ -6,12 +6,17 @@ import { G0_MS2 } from '../physics/constants';
 import type { StageDeltaV } from '../physics/deltaV';
 import {
   addStage,
+  finScale,
   liquidEngines,
   removeStage,
+  setBoosterRecovery,
   setBoosters,
   setEngine,
   setEngineCount,
   setFill,
+  setFins,
+  setHeatShield,
+  setRecovery,
   setTank,
   stageEngine,
   stageFill,
@@ -120,6 +125,8 @@ export function EngineerBuilder(p: Props) {
               <th>Dry t</th>
               <th>Δv m/s</th>
               <th title="Stage 1: at liftoff, sea level, boosters included. Upper stages: vacuum, at ignition.">T/W</th>
+              <th title="Fin size relative to the A1-39 fin (0 = none)">Fins ×</th>
+              <th title="Propulsive landing, with propellant held back at staging">Land · reserve t</th>
               <th />
             </tr>
           </thead>
@@ -156,6 +163,35 @@ export function EngineerBuilder(p: Props) {
                   <td className="mono">{fmt(dvFor(i))}</td>
                   <td className={`mono ${ignitionTWR(i) < (i === 0 ? 1 : 0.4) ? 'warn' : ''}`}>{fmt(ignitionTWR(i), 2)}</td>
                   <td>
+                    <Num label="Fin size" value={finScale(spec, catalog, i)} step={0.25} min={0} max={3} onChange={(v) => setSpec(setFins(spec, catalog, i, v))} />
+                  </td>
+                  <td className="nowrap">
+                    {i < spec.stages.length - 1 ? (
+                      <>
+                        <input
+                          type="checkbox"
+                          aria-label={`Land ${st.name}`}
+                          checked={st.recovery === 'propulsive'}
+                          onChange={(e) =>
+                            setSpec(e.target.checked ? setRecovery(spec, i, 'propulsive', model.propellantKg * 0.2) : setRecovery(spec, i, 'none'))
+                          }
+                        />{' '}
+                        {st.recovery === 'propulsive' && (
+                          <Num
+                            label="Landing reserve"
+                            value={(st.landingReserveKg ?? 0) / 1000}
+                            step={10}
+                            min={0}
+                            max={Math.round(model.propellantKg / 1000)}
+                            onChange={(v) => setSpec(setRecovery(spec, i, 'propulsive', v * 1000))}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td>
                     {i > 0 && (
                       <button className="btn small ghost" onClick={() => setSpec(removeStage(spec, i))} aria-label={`Remove ${st.name}`}>
                         ✕
@@ -183,6 +219,26 @@ export function EngineerBuilder(p: Props) {
               </td>
               <td colSpan={8} className="muted">
                 Strap-ons on the first stage; separate at burnout.
+              </td>
+              <td colSpan={2} className="nowrap">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={b?.recovery === 'parachute'}
+                    disabled={!b}
+                    onChange={(e) => setSpec(setBoosterRecovery(spec, e.target.checked ? 'parachute' : 'none'))}
+                  />{' '}
+                  Parachutes
+                </label>
+              </td>
+            </tr>
+            <tr>
+              <td>{spec.payload.name}</td>
+              <td colSpan={8} className="muted">
+                Heat shield thickness (1 = standard; thicker is heavier)
+              </td>
+              <td colSpan={3}>
+                <Num label="Heat shield" value={spec.payload.heatShieldScale ?? 1} step={0.25} min={0.5} max={3} onChange={(v) => setSpec(setHeatShield(spec, v))} />
               </td>
             </tr>
           </tbody>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FlightRecord, Sample } from '../physics/types';
+import type { Sample } from '../physics/types';
 
 /** Interpolated sample at playback time t (binary search + linear blend). */
 export function sampleAt(samples: Sample[], t: number): Sample {
@@ -55,20 +55,20 @@ export interface Playback {
   seek: (t: number) => void;
 }
 
-export function usePlayback(record: FlightRecord, initialSpeed: number): Playback {
+/** Plays a clock from 0 to durationS. A new `source` (e.g. a new flight) resets it. */
+export function usePlayback(source: unknown, durationS: number, initialSpeed: number): Playback {
   const tRef = useRef(0);
   const [t, setT] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeedState] = useState(initialSpeed);
   const speedRef = useRef(initialSpeed);
-  const duration = record.durationS;
+  const duration = durationS;
 
-  // A new flight record resets playback.
   useEffect(() => {
     tRef.current = 0;
     setT(0);
     setPlaying(false);
-  }, [record]);
+  }, [source]);
 
   useEffect(() => {
     if (!playing) return;

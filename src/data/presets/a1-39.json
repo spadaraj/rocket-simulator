@@ -15,8 +15,8 @@
         { "part": "a139-fin", "count": 4 },
         { "part": "a139-landing-leg", "count": 4 }
       ],
-      "boosters": { "part": "srb-sls-5seg", "count": 4, "separate": "onBurnout", "color": "#f4f6fa" },
-      "recovery": "propulsive"
+      "boosters": { "part": "srb-sls-5seg", "count": 4, "separate": "onBurnout", "color": "#f4f6fa", "recovery": "parachute" },
+      "recovery": "none"
     },
     {
       "name": "Stage 2",
@@ -46,6 +46,7 @@
   "notes": [
     "Layout from Roscoe's blueprint (A1-39-001). Dimensions from the blueprint; masses are free-design estimates.",
     "Defaults chosen for Roscoe's open decisions: Raptor 2 core engines, SLS boosters, one Raptor Vacuum on the red stage, fins on the core.",
-    "Nine core engines: the drawing shows about five, but the sim needs more to lift a full core."
+    "Nine core engines: the drawing shows about five, but the sim needs more to lift a full core.",
+    "Boosters come down on parachutes. The core has legs, but landing it is off by default: holding back landing fuel leaves too little for the Moon with this design. Turn on \"Land the core\" in the builder to see the trade-off."
   ]
 }

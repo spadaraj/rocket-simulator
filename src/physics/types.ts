@@ -35,6 +35,8 @@ export interface LiquidEngine extends PartBase {
   restartable: boolean;
   /** Vacuum-optimised nozzle: not meant to fire in thick air. */
   vacuumOnly?: boolean;
+  /** How far the engine can swivel to steer (default 5°). */
+  gimbalDeg?: number;
 }
 
 export interface SolidBooster extends PartBase {
@@ -46,6 +48,8 @@ export interface SolidBooster extends PartBase {
   nozzleExitAreaM2: number;
   /** [fraction of burn time, relative thrust]. Scaled so the burn uses exactly propellantKg. */
   thrustCurve: [number, number][];
+  /** Nozzle steering range (default 5°). */
+  gimbalDeg?: number;
 }
 
 export interface Tank extends PartBase {
@@ -63,6 +67,14 @@ export interface Payload extends PartBase {
   crew?: number;
   /** Jettisoned this many seconds after the first staging (e.g. the escape tower). */
   jettisonAfterFirstStagingS?: number;
+  /** Own engine, for the Moon leg (service module). Propellant is included in massKg. */
+  propulsion?: { propellantKg: number; ispS: number };
+  /** Two-stage lander. All masses are included in massKg; the rest is the descent stage's dry mass. */
+  lander?: { descentPropellantKg: number; ascentPropellantKg: number; ascentDryKg: number; ispS: number };
+  /** Re-entry capsule heat shield, at heat-shield scale 1. */
+  heatShield?: { massKg: number; maxHeatFluxWm2: number; maxHeatLoadJm2: number };
+  /** Splashdown parachutes: total drag area (Cd × area) of the mains. */
+  parachuteDragAreaM2?: number;
 }
 
 export interface AeroPart extends PartBase {
@@ -94,6 +106,8 @@ export interface BoosterRef {
   count: number;
   separate: 'onBurnout';
   color?: string;
+  /** Parachutes bring them down into the sea. */
+  recovery?: 'none' | 'parachute';
 }
 
 export interface StageSpec {
@@ -103,6 +117,8 @@ export interface StageSpec {
   parts: PartRef[];
   boosters?: BoosterRef;
   recovery?: 'none' | 'parachute' | 'propulsive';
+  /** Propulsive recovery: propellant held back at staging for the landing burns. */
+  landingReserveKg?: number;
 }
 
 export interface MissionSpec {
@@ -111,6 +127,8 @@ export interface MissionSpec {
   pitchKick: { timeS: number; angleDeg: number };
   /** Throttle liquid engines down while dynamic pressure is above a threshold. */
   maxQThrottle?: { aboveQPa: number; throttle: number };
+  /** Flight-path angle at the top of the atmosphere coming home (negative = downward). */
+  reentryAngleDeg?: number;
 }
 
 export interface RocketSpec {
@@ -121,7 +139,7 @@ export interface RocketSpec {
   /** Bottom stage first. */
   stages: StageSpec[];
   /** Sits on top of the last stage. Bottom to top. */
-  payload: { name: string; parts: PartRef[] };
+  payload: { name: string; parts: PartRef[]; /** Heat-shield thickness, 1 = standard. */ heatShieldScale?: number };
   mission: MissionSpec;
   /** Parts designed for this rocket (free-design tanks), layered over the catalog. */
   customParts?: Part[];
@@ -155,6 +173,10 @@ export interface Sample {
   propellantFraction: number[];
   perigeeAltM: number;
   apogeeAltM: number;
+  /** Angle between the nose and the oncoming air, plus the design gust. */
+  aoaDeg: number;
+  /** Air's turning push divided by what the steering can resist (above 1 = tumbles). */
+  tumbleRatio: number;
 }
 
 export type EventType =
@@ -169,7 +191,9 @@ export type EventType =
   | 'engineCutoff'
   | 'orbit'
   | 'failure'
-  | 'impact';
+  | 'impact'
+  | 'engineOut'
+  | 'systemCheck';
 
 export interface FlightEvent {
   tS: number;
@@ -178,7 +202,44 @@ export interface FlightEvent {
   stageIndex: number;
 }
 
-export type FailureType = 'noLiftoff' | 'outOfFuel' | 'breakup' | 'crash';
+/** Ascent failures. */
+export type FailureType = 'noLiftoff' | 'outOfFuel' | 'breakup' | 'crash' | 'tumble' | 'engineFailure';
+/** Everything that can go wrong on the whole mission. */
+export type MissionFailureType = FailureType | 'moonShort' | 'burnUp' | 'skipOut' | 'crewG' | 'crashLanding';
+
+// ---------- Chaos Mode ----------
+
+export type SystemName = 'engines' | 'tanks' | 'power' | 'guidance' | 'comms';
+
+export type Fault =
+  /** Engines shut down on a stage, some seconds after that stage lights. */
+  | { kind: 'engineOut'; stageIndex: number; afterIgnitionS: number; engines: number }
+  /** The top stage loses part of its leftover propellant while coasting in orbit. */
+  | { kind: 'leak'; fraction: number }
+  /** A system flags red at its check, then mission control resets it. */
+  | { kind: 'glitch'; system: 'power' | 'guidance' | 'comms' };
+
+export interface ChecklistItem {
+  system: SystemName;
+  tS: number;
+  status: 'go' | 'fault';
+  note: string;
+  /** Glitches are cleared by mission control at this time. */
+  clearedTS?: number;
+}
+
+/** A piece that came off the rocket at this moment, for the recovery simulation. */
+export interface Separation {
+  kind: 'boosters' | 'stage';
+  stageIndex: number;
+  tS: number;
+  xM: number;
+  yM: number;
+  vxMS: number;
+  vyMS: number;
+  /** Propellant still in the piece (the landing reserve). */
+  propellantKg: number;
+}
 
 export interface Failure {
   type: FailureType;
@@ -210,6 +271,15 @@ export interface FlightRecord {
     maxQAltitudeM: number;
     maxGLoad: number;
     structuralLimitPa: number;
+    /** Worst air-twist / steering ratio (above 1 tumbles). */
+    maxTumbleRatio: number;
+    /** (Centre of mass − centre of pressure) / diameter at liftoff: positive means passively stable. */
+    staticMarginCalibers: number;
   };
   durationS: number;
+  separations: Separation[];
+  /** Chaos Mode faults this flight was given. */
+  faults: Fault[];
+  /** Systems check while coasting in orbit (empty if orbit was not reached). */
+  checklist: ChecklistItem[];
 }

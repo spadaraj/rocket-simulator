@@ -3,11 +3,18 @@
 import { catalog } from '../data/catalog';
 import { autoSize, type AutoSizeResult } from '../physics/autosize';
 import { findFixes, type FixResult } from '../physics/fixes';
-import type { FailureType, RocketSpec } from '../physics/types';
+import type { Fault, MissionFailureType, RocketSpec } from '../physics/types';
 
 export type WorkerRequest =
   | { id: number; kind: 'autosize'; spec: RocketSpec }
-  | { id: number; kind: 'fixes'; spec: RocketSpec; failureType: FailureType };
+  | {
+      id: number;
+      kind: 'fixes';
+      spec: RocketSpec;
+      failureType: MissionFailureType;
+      detail: Record<string, number | string>;
+      faults: Fault[];
+    };
 
 type Pending = (result: unknown) => void;
 /** Omit that distributes over the union. */
@@ -48,6 +55,11 @@ export function autoSizeAsync(spec: RocketSpec): Promise<AutoSizeResult> {
   return run({ kind: 'autosize', spec }, () => autoSize(spec, catalog));
 }
 
-export function findFixesAsync(spec: RocketSpec, failureType: FailureType): Promise<{ fixes: FixResult[]; tested: number }> {
-  return run({ kind: 'fixes', spec, failureType }, () => findFixes(spec, catalog, failureType));
+export function findFixesAsync(
+  spec: RocketSpec,
+  failureType: MissionFailureType,
+  detail: Record<string, number | string>,
+  faults: Fault[],
+): Promise<{ fixes: FixResult[]; tested: number }> {
+  return run({ kind: 'fixes', spec, failureType, detail, faults }, () => findFixes(spec, catalog, failureType, 3, detail, faults));
 }

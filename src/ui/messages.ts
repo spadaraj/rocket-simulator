@@ -2,6 +2,8 @@
 // Roscoe mode shows layers 1 and 3 in short words; Engineer mode shows all three.
 
 import { TLI_BUDGET_MS } from '../physics/deltaV';
+import type { MissionRecord } from '../physics/mission';
+import { CREW_G_LIMIT } from '../physics/reentry';
 import type { FlightRecord } from '../physics/types';
 
 export interface Feedback {
@@ -17,6 +19,77 @@ const km = (m: number) => `${(m / 1000).toFixed(1)} km`;
 const kpa = (pa: number) => `${(pa / 1000).toFixed(1)} kPa`;
 const mn = (n: number) => `${(n / 1e6).toFixed(1)} MN`;
 const num = (x: number | string | undefined) => Number(x ?? 0);
+const mw = (w: number) => `${(w / 1e6).toFixed(2)} MW/m²`;
+const mj = (j: number) => `${(j / 1e6).toFixed(0)} MJ/m²`;
+
+/** Feedback for the whole mission: launch problems first, then the Moon, re-entry and landing. */
+export function missionFeedback(m: MissionRecord): Feedback {
+  const f = m.result.failure;
+  if (!f || ['noLiftoff', 'outOfFuel', 'breakup', 'crash', 'tumble', 'engineFailure'].includes(f.type)) {
+    const fb = feedbackFor(m.ascent);
+    if (!fb.success || !m.result.success) return fb;
+    const toMoon = !!m.moon;
+    const recovered = m.recoveries.filter((r) => r.outcome === 'landed' || r.outcome === 'splashdown').map((r) => r.name);
+    const splash = m.reentry ? ` Splashdown at ${m.reentry.splashSpeedMS.toFixed(1)} m/s after a ${m.reentry.peakGLoad.toFixed(1)} g re-entry.` : '';
+    return {
+      success: true,
+      roscoeTitle: toMoon ? 'You went to the Moon and back!' : 'You went to space and back!',
+      roscoeFix: recovered.length ? `And you got back the ${recovered.join(' and the ').toLowerCase()}!` : 'The crew splashed down safely!',
+      title: toMoon ? 'Mission complete: Moon landing and safe return' : 'Mission complete',
+      why: `${fb.why}${splash}`,
+      fixes: recovered.length ? [`Recovered: ${recovered.join(', ')}.`] : ['Nothing was recovered; every stage was thrown away.'],
+    };
+  }
+  const d = f.detail;
+  switch (f.type) {
+    case 'moonShort':
+      return {
+        success: false,
+        roscoeTitle: d.leg === 'Trans-lunar injection' ? 'Made it to space, but not enough fuel for the Moon!' : `Ran out of fuel on the way: ${String(d.leg).toLowerCase()}!`,
+        roscoeFix: 'Try this: more fuel in the top stage.',
+        title: `Moon trip short at ${d.leg}`,
+        why: `${d.by} needs ${num(d.neededMS).toFixed(0)} m/s for ${String(d.leg).toLowerCase()} but has ${num(d.availableMS).toFixed(0)} m/s.`,
+        fixes: ['More propellant in the upper stage.', "Don't hold back fuel to land the first stage.", 'A higher-Isp upper-stage engine.'],
+      };
+    case 'burnUp':
+      return {
+        success: false,
+        roscoeTitle: 'Too hot coming home!',
+        roscoeFix: 'Try this: come home at a gentler angle, or use a thicker heat shield.',
+        title: 'Heat shield overheated on re-entry',
+        why: `At ${num(d.entryAngleDeg).toFixed(1)}° and ${num(d.entrySpeedMS).toFixed(0)} m/s, heating peaked at ${mw(num(d.peakHeatFluxWm2))} (shield rated ${mw(num(d.maxHeatFluxWm2))}); total heat ${mj(num(d.heatLoadJm2))} (rated ${mj(num(d.maxHeatLoadJm2))}).`,
+        fixes: ['A shallower entry angle (less peak heating).', 'A thicker heat shield.', 'Too shallow and the capsule skips back out, so stay inside the corridor.'],
+      };
+    case 'skipOut':
+      return {
+        success: false,
+        roscoeTitle: 'It skipped off the air like a stone on a pond!',
+        roscoeFix: 'Try this: come home at a steeper angle.',
+        title: 'Skipped out of the atmosphere',
+        why: `At ${num(d.entryAngleDeg).toFixed(1)}° the capsule didn't bite into the air hard enough and bounced back out into space at ${num(d.entrySpeedMS).toFixed(0)} m/s.`,
+        fixes: ['A steeper entry angle.'],
+      };
+    case 'crewG':
+      return {
+        success: false,
+        roscoeTitle: 'Too bumpy for the astronauts!',
+        roscoeFix: 'Try this: come home at a gentler angle.',
+        title: 'Re-entry g-load too high for the crew',
+        why: `Peak deceleration ${num(d.peakGLoad).toFixed(1)} g at a ${num(d.entryAngleDeg).toFixed(1)}° entry; the crew limit is ${CREW_G_LIMIT} g.`,
+        fixes: ['A shallower entry angle spreads the braking out.'],
+      };
+    case 'crashLanding':
+    default:
+      return {
+        success: false,
+        roscoeTitle: `The crew made it, but the ${String(d.piece).toLowerCase()} landed too hard!`,
+        roscoeFix: 'Try this: save more fuel for landing.',
+        title: `${d.piece} crash landing`,
+        why: `${d.reason}. It held back ${(num(d.reserveKg) / 1000).toFixed(0)} t of fuel; the entry burn took ${num(d.entryBurnDeltaVMS).toFixed(0)} m/s off before the landing burn.`,
+        fixes: ['Hold back more landing fuel.', 'Stage earlier, so the stage comes back slower.', "Or don't land it."],
+      };
+  }
+}
 
 export function feedbackFor(record: FlightRecord): Feedback {
   const o = record.outcome;
@@ -29,7 +102,7 @@ export function feedbackFor(record: FlightRecord): Feedback {
       title: 'Orbit achieved',
       why: `Orbit ${km(o.orbit!.perigeeAltM)} × ${km(o.orbit!.apogeeAltM)}. ${o.remainingDeltaVMS.toFixed(0)} m/s of delta-v left in the upper stage; heading for the Moon needs about ${TLI_BUDGET_MS} m/s.`,
       fixes: enough
-        ? ['Enough left for trans-lunar injection (simulated in a later phase).']
+        ? ['Enough left for trans-lunar injection.']
         : ['Add propellant to the upper stage, use a higher-Isp engine, or lighten the payload.'],
     };
   }
@@ -75,6 +148,26 @@ export function feedbackFor(record: FlightRecord): Feedback {
         ],
       };
     }
+    case 'tumble': {
+      const off = num(d.enginesRunning) === 0;
+      return {
+        success: false,
+        roscoeTitle: 'It wobbled and flipped!',
+        roscoeFix: off ? 'Try this: add fins, so it flies straight on its own.' : 'Try this: bigger fins, or engines that can steer.',
+        title: 'Tumbled out of control',
+        why: `The air's twist was ${num(d.ratio).toFixed(1)}× what the ${off ? 'attitude thrusters' : 'swivelling engines'} could hold, at ${num(d.aoaDeg).toFixed(1)}° angle of attack and ${kpa(num(d.dynamicPressurePa))}. Centre of pressure ${num(d.copM).toFixed(0)} m up vs centre of mass ${num(d.comM).toFixed(0)} m: the push is ahead of the weight.`,
+        fixes: ['Bigger fins (moves the centre of pressure back).', 'Engines that gimbal further, or more of them.', 'A smaller pitch kick (less angle of attack).', 'Stage higher, where the air is thinner.'],
+      };
+    }
+    case 'engineFailure':
+      return {
+        success: false,
+        roscoeTitle: 'An engine stopped working!',
+        roscoeFix: 'Try this: add spare engines, so the others can keep going.',
+        title: 'Engine failure',
+        why: `${d.fault} at T+${num(d.faultTimeS).toFixed(0)} s, and the rest could not make up for it.`,
+        fixes: ['Add engines, so losing one leaves enough thrust (engine-out capability).', 'Carry more propellant for the longer burn.'],
+      };
     case 'crash':
     default:
       return {

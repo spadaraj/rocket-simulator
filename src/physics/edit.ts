@@ -1,7 +1,7 @@
 // Pure edit operations on a RocketSpec. The builder, auto-size and fix search all use these.
 
 import { designTank } from './design';
-import type { Catalog, LiquidEngine, MissionSpec, Part, PartRef, RocketSpec, Tank } from './types';
+import type { AeroPart, Catalog, LiquidEngine, MissionSpec, Part, PartRef, RocketSpec, StageSpec, Tank } from './types';
 import { resolveCatalog } from './vehicle';
 
 const NEW_STAGE_COLORS = ['#d63a3a', '#f4f6fa', '#3a7bd5', '#ffb02e', '#8e99a8'];
@@ -50,11 +50,11 @@ function prune(spec: RocketSpec): RocketSpec {
   return { ...spec, customParts: customParts.length ? customParts : undefined };
 }
 
-function nextCustomId(spec: RocketSpec): string {
+function nextCustomId(spec: RocketSpec, prefix = 'custom-tank-'): string {
   let n = 1;
   const ids = new Set((spec.customParts ?? []).map((p) => p.id));
-  while (ids.has(`custom-tank-${n}`)) n++;
-  return `custom-tank-${n}`;
+  while (ids.has(`${prefix}${n}`)) n++;
+  return `${prefix}${n}`;
 }
 
 /** Fraction of the stage's tank capacity that is loaded. */
@@ -126,7 +126,10 @@ export function setBoosters(spec: RocketSpec, part: string, count: number): Rock
         delete rest.boosters;
         return rest;
       }
-      return { ...s, boosters: { part, count: Math.min(8, count), separate: 'onBurnout' as const, color: '#f4f6fa' } };
+      return {
+        ...s,
+        boosters: { part, count: Math.min(8, count), separate: 'onBurnout' as const, color: '#f4f6fa', recovery: s.boosters?.recovery },
+      };
     }),
   };
 }
@@ -167,4 +170,72 @@ export function setMission(spec: RocketSpec, patch: Partial<MissionSpec>): Rocke
 
 export function liquidEngines(catalog: Catalog): LiquidEngine[] {
   return Object.values(catalog).filter((p): p is LiquidEngine => p.type === 'liquidEngine');
+}
+
+// ---------- Phase 3: fins, recovery, heat shield ----------
+
+/** The A1-39 fin is the size-1 reference: 4 m span, 9 m root chord. */
+const FIN_REF = { spanM: 4, rootM: 9, massKg: 2500, areaM2: 18 };
+
+export const stageFins = (spec: RocketSpec, catalog: Catalog, i: number) =>
+  findPart<AeroPart>(spec, catalog, i, 'aero');
+
+/** Fin size relative to the A1-39 fin (0 = no fins). */
+export function finScale(spec: RocketSpec, catalog: Catalog, i: number): number {
+  const f = stageFins(spec, catalog, i);
+  return f ? (f.part.diameterM ?? FIN_REF.spanM) / FIN_REF.spanM : 0;
+}
+
+export function setFins(spec: RocketSpec, catalog: Catalog, i: number, scale: number): RocketSpec {
+  const f = stageFins(spec, catalog, i);
+  if (scale <= 0) {
+    if (!f) return spec;
+    return prune({ ...spec, stages: spec.stages.map((s, si) => (si === i ? { ...s, parts: s.parts.filter((_, pi) => pi !== f.index) } : s)) });
+  }
+  if (f && Math.abs(finScale(spec, catalog, i) - scale) < 1e-6) return spec;
+  // The reference fin needs no custom part.
+  if (Math.abs(scale - 1) < 1e-6 && catalog['a139-fin']) {
+    const ref: PartRef = { part: 'a139-fin', count: f?.ref.count ?? 4 };
+    return prune(f ? replaceRef(spec, i, f.index, ref) : { ...spec, stages: spec.stages.map((s, si) => (si === i ? { ...s, parts: [...s.parts, ref] } : s)) });
+  }
+  const id = f?.part.id.startsWith('custom-fin-') ? f.part.id : nextCustomId(spec, 'custom-fin-');
+  const fin: AeroPart = {
+    id,
+    type: 'aero',
+    name: `Fin (${scale.toFixed(1)}× size)`,
+    massKg: Math.round(FIN_REF.massKg * scale * scale),
+    diameterM: FIN_REF.spanM * scale,
+    lengthM: FIN_REF.rootM * scale,
+    areaM2: FIN_REF.areaM2 * scale * scale,
+    source: 'Free design: the A1-39 fin scaled; mass grows with area.',
+    confidence: 'estimate',
+  };
+  const customParts = [...(spec.customParts ?? []).filter((p) => p.id !== id), fin];
+  const ref: PartRef = { part: id, count: f?.ref.count ?? 4 };
+  const withRef = f ? replaceRef(spec, i, f.index, ref) : { ...spec, stages: spec.stages.map((s, si) => (si === i ? { ...s, parts: [...s.parts, ref] } : s)) };
+  return prune({ ...withRef, customParts });
+}
+
+export function setRecovery(spec: RocketSpec, i: number, method: NonNullable<StageSpec['recovery']>, landingReserveKg?: number): RocketSpec {
+  return {
+    ...spec,
+    stages: spec.stages.map((s, si) => {
+      if (si !== i) return s;
+      const out: StageSpec = { ...s, recovery: method };
+      if (method === 'propulsive') out.landingReserveKg = Math.max(0, Math.round(landingReserveKg ?? s.landingReserveKg ?? 0));
+      else delete out.landingReserveKg;
+      return out;
+    }),
+  };
+}
+
+export function setBoosterRecovery(spec: RocketSpec, method: 'none' | 'parachute'): RocketSpec {
+  return {
+    ...spec,
+    stages: spec.stages.map((s, i) => (i === 0 && s.boosters ? { ...s, boosters: { ...s.boosters, recovery: method } } : s)),
+  };
+}
+
+export function setHeatShield(spec: RocketSpec, scale: number): RocketSpec {
+  return { ...spec, payload: { ...spec.payload, heatShieldScale: Math.max(0.5, Math.min(3, scale)) } };
 }

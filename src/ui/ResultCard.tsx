@@ -1,4 +1,5 @@
 import type { FixResult } from '../physics/fixes';
+import type { MissionStep } from '../physics/mission';
 import type { Feedback } from './messages';
 import { canSpeak, speak } from './speech';
 
@@ -33,11 +34,34 @@ function Face({ happy }: { happy: boolean }) {
 interface CardProps {
   fb: Feedback;
   fix?: FixState;
+  steps: MissionStep[];
+  replays: { label: string; onClick: () => void }[];
   onAgain: () => void;
   onTryFix: (f: FixResult) => void;
 }
 
-export function RoscoeResult({ fb, fix, onAgain, onTryFix }: CardProps) {
+const STEP_ICON: Record<MissionStep['id'], string> = { ascent: '🚀', systems: '🎧', recovery: '🪂', moon: '🌕', reentry: '🔥' };
+const STATUS_ICON: Record<MissionStep['status'], string> = { ok: '✅', fail: '❌', warn: '⚠️', skipped: '➖' };
+
+function Steps({ steps, roscoe }: { steps: MissionStep[]; roscoe: boolean }) {
+  return (
+    <ul className={`mission-steps ${roscoe ? 'roscoe' : ''}`}>
+      {steps.map((s, i) => (
+        <li key={i} className={s.status} title={s.note}>
+          <span>{s.id === 'recovery' && s.status === 'skipped' ? '🌊' : STEP_ICON[s.id]}</span>
+          {roscoe ? <span>{STATUS_ICON[s.status]}</span> : (
+            <>
+              <span className="ms-label">{s.label}</span>
+              <span className="ms-note muted">{s.note}</span>
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function RoscoeResult({ fb, fix, steps, replays, onAgain, onTryFix }: CardProps) {
   const best = fix?.status === 'done' ? fix.fixes[0] : undefined;
   const tip = best ? `Try this: ${best.roscoe.toLowerCase()}.` : fb.roscoeFix;
   return (
@@ -47,6 +71,7 @@ export function RoscoeResult({ fb, fix, onAgain, onTryFix }: CardProps) {
         {fb.success ? '🏆 ' : ''}
         {fb.roscoeTitle}
       </h2>
+      <Steps steps={steps} roscoe />
       <p className="result-fix">{fix?.status === 'working' ? '🔧 Thinking of a fix…' : tip}</p>
       <div className="result-actions">
         {canSpeak && (
@@ -64,16 +89,26 @@ export function RoscoeResult({ fb, fix, onAgain, onTryFix }: CardProps) {
           </button>
         )}
       </div>
+      {replays.length > 1 && (
+        <div className="result-replays">
+          {replays.map((r) => (
+            <button key={r.label} className="btn small" onClick={r.onClick}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-export function EngineerResult({ fb, fix, onAgain, onTryFix }: CardProps) {
+export function EngineerResult({ fb, fix, steps, replays, onAgain, onTryFix }: CardProps) {
   return (
     <div className={`result-card engineer ${fb.success ? 'win' : 'lose'}`}>
       <div className="result-kicker">{fb.success ? 'Mission result' : 'Failure'}</div>
       <h3>{fb.title}</h3>
       <p>{fb.why}</p>
+      <Steps steps={steps} roscoe={false} />
       {fb.success || !fix ? (
         <ul>
           {fb.fixes.map((f) => (
@@ -85,7 +120,7 @@ export function EngineerResult({ fb, fix, onAgain, onTryFix }: CardProps) {
       ) : (
         <>
           <p className="muted">
-            Tested {fix.tested} fixes by re-flying; {fix.fixes.length ? `${fix.fixes.length} reached orbit` : 'none reached orbit on its own'}.
+            Tested {fix.tested} fixes by re-flying the mission; {fix.fixes.length ? `${fix.fixes.length} got past this problem` : 'none fixed it on its own'}.
           </p>
           {fix.fixes.length ? (
             <ul className="fix-list">
@@ -93,7 +128,10 @@ export function EngineerResult({ fb, fix, onAgain, onTryFix }: CardProps) {
                 <li key={f.id}>
                   <span>
                     {f.title}
-                    <span className="muted"> → {(f.perigeeAltM / 1000).toFixed(0)} km orbit, {f.remainingDeltaVMS.toFixed(0)} m/s left</span>
+                    <span className="muted">
+                      {' '}
+                      → {f.complete ? 'whole mission works' : `next problem: ${f.nextProblem}`}, {(f.perigeeAltM / 1000).toFixed(0)} km orbit, {f.remainingDeltaVMS.toFixed(0)} m/s left
+                    </span>
                   </span>
                   <button className="btn small" onClick={() => onTryFix(f)}>
                     Try this
@@ -110,9 +148,16 @@ export function EngineerResult({ fb, fix, onAgain, onTryFix }: CardProps) {
           )}
         </>
       )}
-      <button className="btn small" onClick={onAgain}>
-        Replay
-      </button>
+      <div className="result-replays">
+        <button className="btn small" onClick={onAgain}>
+          Fly again
+        </button>
+        {replays.map((r) => (
+          <button key={r.label} className="btn small ghost" onClick={r.onClick}>
+            {r.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

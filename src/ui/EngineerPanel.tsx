@@ -1,17 +1,34 @@
-// Engineer mode: numeric gauges, propellant, design check, quick tweaks, event log.
+// Engineer mode: numeric gauges, propellant, design check, stability, recovery, Moon leg,
+// re-entry, flight settings and the event log.
 
 import { LEO_BUDGET_MS, TLI_BUDGET_MS, type StageDeltaV } from '../physics/deltaV';
-import type { FlightRecord, MissionSpec, Sample } from '../physics/types';
+import type { MissionRecord } from '../physics/mission';
+import { CREW_G_LIMIT, DEFAULT_ENTRY_ANGLE_DEG } from '../physics/reentry';
+import type { Fault, FlightRecord, MissionSpec, Sample } from '../physics/types';
 import type { Vehicle } from '../physics/vehicle';
 
 interface Props {
   record: FlightRecord;
+  mission: MissionRecord;
   vehicle: Vehicle;
   sample: Sample;
+  /** Playback time (the falling pieces run past the end of the ascent record). */
+  t: number;
   deltaV: StageDeltaV[];
-  mission: MissionSpec;
+  missionSpec: MissionSpec;
   setMission: (patch: Partial<MissionSpec>) => void;
   onSeek: (t: number) => void;
+}
+
+function describeFault(f: Fault, vehicle: Vehicle): string {
+  switch (f.kind) {
+    case 'engineOut':
+      return `${f.engines} engine${f.engines > 1 ? 's' : ''} out on ${vehicle.stages[f.stageIndex]?.name ?? 'a stage'}, ${f.afterIgnitionS} s after it lights`;
+    case 'leak':
+      return `Top-stage leak in orbit: ${Math.round(f.fraction * 100)}% of what's left`;
+    case 'glitch':
+      return `${f.system[0].toUpperCase()}${f.system.slice(1)} glitch during the systems check`;
+  }
 }
 
 const fmt = (x: number, d = 0) =>
@@ -60,10 +77,13 @@ function Slider(props: {
 }
 
 export function EngineerPanel(p: Props) {
-  const { sample: s, record, vehicle } = p;
+  const { sample: s, record, vehicle, mission } = p;
   const stage = vehicle.stages[s.stageIndex];
   const totalDv = p.deltaV.reduce((a, d) => a + d.deltaVMS, 0);
-  const m = p.mission;
+  const m = p.missionSpec;
+  const toMoon = m.target === 'moon';
+  const entryAngle = m.reentryAngleDeg ?? DEFAULT_ENTRY_ANGLE_DEG[toMoon ? 'moon' : 'orbit'];
+  const re = mission.reentry;
 
   return (
     <div className="engineer-panel">
@@ -149,6 +169,131 @@ export function EngineerPanel(p: Props) {
       </section>
 
       <section>
+        <h4>Stability</h4>
+        <table className="dv-table">
+          <tbody>
+            <tr>
+              <td>Static margin at liftoff</td>
+              <td className={record.summary.staticMarginCalibers < 0 ? 'caution' : 'ok'}>
+                {fmt(record.summary.staticMarginCalibers, 2)} cal {record.summary.staticMarginCalibers < 0 ? '(steered)' : '(stable)'}
+              </td>
+            </tr>
+            <tr>
+              <td>Angle of attack now (with 25 m/s gust)</td>
+              <td>{fmt(s.aoaDeg, 1)}°</td>
+            </tr>
+            <tr>
+              <td>Air twist / steering now</td>
+              <td className={s.tumbleRatio > 1 ? 'warn' : s.tumbleRatio > 0.5 ? 'caution' : ''}>{fmt(s.tumbleRatio * 100)}%</td>
+            </tr>
+            <tr>
+              <td>Worst air twist / steering</td>
+              <td className={record.summary.maxTumbleRatio > 1 ? 'warn' : record.summary.maxTumbleRatio > 0.5 ? 'caution' : 'ok'}>
+                {fmt(record.summary.maxTumbleRatio * 100)}%
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      {mission.recoveries.length > 0 && (
+        <section>
+          <h4>Recovery</h4>
+          <table className="dv-table">
+            <tbody>
+              {mission.recoveries.map((r, i) => (
+                <tr key={i}>
+                  <td>
+                    {r.name} <span className="muted">({r.method === 'none' ? 'expended' : r.method})</span>
+                    <div className="muted small">
+                      {p.t < r.endTS ? `${r.samples[0].tS <= p.t ? 'falling' : 'attached'}` : r.reason}
+                      {r.method === 'propulsive' && ` · reserve ${fmt(r.reserveKg / 1000)} t, entry burn ${fmt(r.entryBurnDeltaVMS)} m/s, ${fmt(r.propellantLeftKg / 1000, 1)} t left`}
+                    </div>
+                  </td>
+                  <td className={r.failed ? 'warn' : r.outcome === 'lost' ? 'muted' : 'ok'}>{r.outcome}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {mission.moon && (
+        <section>
+          <h4>Moon leg (delta-v ledger)</h4>
+          <table className="dv-table">
+            <tbody>
+              {mission.moon.legs.map((l) => (
+                <tr key={l.id}>
+                  <td>
+                    {l.name}
+                    <div className="muted small">{l.by}</div>
+                  </td>
+                  <td className={l.ok ? 'ok' : 'warn'}>
+                    {fmt(l.availableMS)} / {fmt(l.neededMS)} m/s
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {re && (
+        <section>
+          <h4>Re-entry</h4>
+          <table className="dv-table">
+            <tbody>
+              <tr>
+                <td>Entry</td>
+                <td>
+                  {fmt(re.entrySpeedMS)} m/s at {fmt(re.entryAngleDeg, 1)}°
+                </td>
+              </tr>
+              <tr>
+                <td>Peak heating</td>
+                <td className={re.peakHeatFluxWm2 > re.maxHeatFluxWm2 ? 'warn' : ''}>
+                  {fmt(re.peakHeatFluxWm2 / 1e6, 2)} / {fmt(re.maxHeatFluxWm2 / 1e6, 2)} MW/m²
+                </td>
+              </tr>
+              <tr>
+                <td>Total heat</td>
+                <td className={re.heatLoadJm2 > re.maxHeatLoadJm2 ? 'warn' : ''}>
+                  {fmt(re.heatLoadJm2 / 1e6)} / {fmt(re.maxHeatLoadJm2 / 1e6)} MJ/m²
+                </td>
+              </tr>
+              <tr>
+                <td>Peak g</td>
+                <td className={re.peakGLoad > CREW_G_LIMIT ? 'warn' : ''}>
+                  {fmt(re.peakGLoad, 1)} g (crew limit {CREW_G_LIMIT})
+                </td>
+              </tr>
+              <tr>
+                <td>Result</td>
+                <td className={re.outcome === 'splashdown' ? 'ok' : 'warn'}>
+                  {re.outcome === 'splashdown' ? `Splashdown ${fmt(re.splashSpeedMS, 1)} m/s` : re.outcome}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {record.faults.length > 0 && (
+        <section>
+          <h4>Chaos Mode</h4>
+          <details>
+            <summary className="muted">This flight's fault (spoiler)</summary>
+            <ul className="fault-list">
+              {record.faults.map((f, i) => (
+                <li key={i}>{describeFault(f, vehicle)}</li>
+              ))}
+            </ul>
+          </details>
+        </section>
+      )}
+
+      <section>
         <h4>Flight settings</h4>
         <Slider
           label="Pitch kick time"
@@ -185,6 +330,15 @@ export function EngineerPanel(p: Props) {
           step={5}
           unit="%"
           onChange={(v) => p.setMission({ maxQThrottle: v < 100 ? { aboveQPa: 20000, throttle: v / 100 } : undefined })}
+        />
+        <Slider
+          label="Re-entry angle"
+          value={entryAngle}
+          min={toMoon ? -10 : -5}
+          max={toMoon ? -4 : -0.5}
+          step={0.1}
+          unit="°"
+          onChange={(v) => p.setMission({ reentryAngleDeg: Math.round(v * 10) / 10 })}
         />
       </section>
 

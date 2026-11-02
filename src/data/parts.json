@@ -14,7 +14,8 @@
     "restartable": true,
     "source": "SpaceX public statements (2022), compiled in Wikipedia 'SpaceX Raptor'. Vacuum thrust derived from mass flow at the quoted Isp.",
     "confidence": "estimate",
-    "notes": "Best public estimate; Raptor specs change often and are not formally published."
+    "notes": "Best public estimate; Raptor specs change often and are not formally published.",
+    "gimbalDeg": 15
   },
   {
     "id": "raptor-vacuum",
@@ -32,7 +33,8 @@
     "vacuumOnly": true,
     "source": "SpaceX public statements, compiled in Wikipedia 'SpaceX Raptor'. Sea-level figures derived from a 2.3 m nozzle exit and are not a real rating.",
     "confidence": "estimate",
-    "notes": "Best public estimate. Vacuum nozzle: not designed to fire at sea level."
+    "notes": "Best public estimate. Vacuum nozzle: not designed to fire at sea level.",
+    "gimbalDeg": 3
   },
   {
     "id": "be-4",
@@ -49,7 +51,8 @@
     "restartable": true,
     "source": "Blue Origin (2,400 kN sea-level thrust). Isp and mass are third-party estimates (Wikipedia 'BE-4').",
     "confidence": "estimate",
-    "notes": "Best public estimate; Isp and mass are not published by Blue Origin."
+    "notes": "Best public estimate; Isp and mass are not published by Blue Origin.",
+    "gimbalDeg": 5
   },
   {
     "id": "f-1",
@@ -65,7 +68,8 @@
     "throttleMin": 1,
     "restartable": false,
     "source": "NASA Saturn V Flight Manual SA-503 (MSFC-MAN-503); Rocketdyne F-1 data sheet.",
-    "confidence": "published"
+    "confidence": "published",
+    "gimbalDeg": 6
   },
   {
     "id": "j-2",
@@ -81,7 +85,8 @@
     "throttleMin": 1,
     "restartable": true,
     "source": "NASA Saturn V Flight Manual SA-503 (MSFC-MAN-503); Rocketdyne J-2 data sheet.",
-    "confidence": "published"
+    "confidence": "published",
+    "gimbalDeg": 7
   },
   {
     "id": "sm-methalox-engine",
@@ -99,9 +104,9 @@
     "vacuumOnly": true,
     "source": "Free-design estimate: Apollo SPS thrust class (91 kN) with a methalox vacuum Isp.",
     "confidence": "estimate",
-    "notes": "No real small methalox engine in the catalog fits a 4 m service module, so this one is estimated."
+    "notes": "No real small methalox engine in the catalog fits a 4 m service module, so this one is estimated.",
+    "gimbalDeg": 6
   },
-
   {
     "id": "srb-sls-5seg",
     "type": "solidBooster",
@@ -115,10 +120,52 @@
     "diameterM": 3.71,
     "lengthM": 54,
     "maxDynamicPressurePa": 70000,
-    "thrustCurve": [[0, 0.92], [0.04, 1.0], [0.15, 0.97], [0.35, 0.8], [0.5, 0.75], [0.65, 0.78], [0.8, 0.7], [0.9, 0.5], [0.96, 0.2], [1, 0]],
+    "thrustCurve": [
+      [
+        0,
+        0.92
+      ],
+      [
+        0.04,
+        1.0
+      ],
+      [
+        0.15,
+        0.97
+      ],
+      [
+        0.35,
+        0.8
+      ],
+      [
+        0.5,
+        0.75
+      ],
+      [
+        0.65,
+        0.78
+      ],
+      [
+        0.8,
+        0.7
+      ],
+      [
+        0.9,
+        0.5
+      ],
+      [
+        0.96,
+        0.2
+      ],
+      [
+        1,
+        0
+      ]
+    ],
     "source": "NASA SLS Solid Rocket Booster fact sheet (FS-2020-08); thrust-curve shape approximated from Northrop Grumman QM-1 test data.",
     "confidence": "published",
-    "notes": "Inert mass = 730 t gross minus 631 t propellant. Curve shape is approximate."
+    "notes": "Inert mass = 730 t gross minus 631 t propellant. Curve shape is approximate.",
+    "gimbalDeg": 5
   },
   {
     "id": "srb-shuttle",
@@ -133,12 +180,53 @@
     "diameterM": 3.71,
     "lengthM": 45.5,
     "maxDynamicPressurePa": 70000,
-    "thrustCurve": [[0, 0.95], [0.03, 1.0], [0.15, 0.95], [0.3, 0.75], [0.5, 0.72], [0.65, 0.78], [0.8, 0.68], [0.9, 0.45], [0.97, 0.15], [1, 0]],
+    "thrustCurve": [
+      [
+        0,
+        0.95
+      ],
+      [
+        0.03,
+        1.0
+      ],
+      [
+        0.15,
+        0.95
+      ],
+      [
+        0.3,
+        0.75
+      ],
+      [
+        0.5,
+        0.72
+      ],
+      [
+        0.65,
+        0.78
+      ],
+      [
+        0.8,
+        0.68
+      ],
+      [
+        0.9,
+        0.45
+      ],
+      [
+        0.97,
+        0.15
+      ],
+      [
+        1,
+        0
+      ]
+    ],
     "source": "NASA Space Shuttle News Reference Manual (1988), SRB section; thrust-curve shape approximated from the published RSRM trace.",
     "confidence": "published",
-    "notes": "Curve shape is approximate; it includes the max-Q thrust bucket."
+    "notes": "Curve shape is approximate; it includes the max-Q thrust bucket.",
+    "gimbalDeg": 8
   },
-
   {
     "id": "s-ic-tankage",
     "type": "tank",
@@ -238,7 +326,13 @@
     "crew": 2,
     "source": "NASA Apollo 11 Press Kit (1969).",
     "confidence": "published",
-    "notes": "Fuelled mass. Rides inside the adapter."
+    "notes": "Fuelled mass. Rides inside the adapter.",
+    "lander": {
+      "descentPropellantKg": 8248,
+      "ascentPropellantKg": 2353,
+      "ascentDryKg": 2445,
+      "ispS": 311
+    }
   },
   {
     "id": "apollo-sm",
@@ -249,7 +343,11 @@
     "lengthM": 7.5,
     "source": "NASA Apollo 11 Press Kit (1969).",
     "confidence": "published",
-    "notes": "Fuelled mass."
+    "notes": "Fuelled mass.",
+    "propulsion": {
+      "propellantKg": 18410,
+      "ispS": 314
+    }
   },
   {
     "id": "apollo-cm",
@@ -262,7 +360,14 @@
     "lengthM": 3.5,
     "crew": 3,
     "source": "NASA Apollo 11 Press Kit (1969).",
-    "confidence": "published"
+    "confidence": "published",
+    "heatShield": {
+      "massKg": 850,
+      "maxHeatFluxWm2": 2100000.0,
+      "maxHeatLoadJm2": 230000000.0
+    },
+    "parachuteDragAreaM2": 1216,
+    "notes": "Heat-shield ratings are estimates, set so the safe lunar-return corridor is about −6° to −7.5°, close to Apollo's."
   },
   {
     "id": "apollo-les",
@@ -278,7 +383,6 @@
     "source": "NASA Apollo 11 Press Kit (1969).",
     "confidence": "published"
   },
-
   {
     "id": "a139-core-engine-section",
     "type": "structure",
@@ -381,7 +485,11 @@
     "diameterM": 4,
     "lengthM": 9.5,
     "source": "Free-design estimate, scaled from Apollo (includes ~16 t propellant and the methalox SM engine).",
-    "confidence": "estimate"
+    "confidence": "estimate",
+    "propulsion": {
+      "propellantKg": 17500,
+      "ispS": 360
+    }
   },
   {
     "id": "a139-command-module",
@@ -394,7 +502,14 @@
     "lengthM": 3.6,
     "crew": 3,
     "source": "Free-design estimate, scaled from the Apollo command module.",
-    "confidence": "estimate"
+    "confidence": "estimate",
+    "heatShield": {
+      "massKg": 850,
+      "maxHeatFluxWm2": 2100000.0,
+      "maxHeatLoadJm2": 230000000.0
+    },
+    "parachuteDragAreaM2": 1216,
+    "notes": "Heat-shield ratings are estimates, set so the safe lunar-return corridor is about −6° to −7.5°, close to Apollo's."
   },
   {
     "id": "a139-escape-tower",

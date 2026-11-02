@@ -15,14 +15,19 @@ import {
 import { dragCoefficient } from './drag';
 import { rk4Step, type State } from './integrator';
 import { orbitElements } from './orbit';
+import { aeroMomentNm, DESIGN_GUST_MS, RCS_FRACTION, stability } from './stability';
 import type {
   Catalog,
+  ChecklistItem,
   Failure,
+  Fault,
   FlightEvent,
   FlightRecord,
   Outcome,
   RocketSpec,
   Sample,
+  Separation,
+  SystemName,
 } from './types';
 import { buildVehicle, frontalAreaM2, type Vehicle } from './vehicle';
 
@@ -38,6 +43,8 @@ export interface SimOptions {
   fixedAttitude?: { x: number; y: number };
   /** How long to keep coasting after reaching orbit (default 90 s). */
   coastAfterOrbitS?: number;
+  /** Chaos Mode faults to inject. */
+  faults?: Fault[];
 }
 
 /** Everything about the vehicle that changes only at events. */
@@ -52,6 +59,9 @@ interface Config {
   guidanceActive: boolean;
   /** Velocity has caught up with the pitch kick; follow it from now on. */
   kickDone: boolean;
+  /** Engines shut down by faults, per stage. */
+  enginesOut: number[];
+  stageIgnitionS: number[];
 }
 
 const KICK_RAMP_S = 4;
@@ -60,6 +70,14 @@ const POST_FAILURE_COAST_S = 4;
 const SAMPLE_POWERED_S = 0.2;
 const SAMPLE_COAST_S = 1;
 const CUTOFF_MARGIN_M = 10e3;
+/** The air must out-twist the steering for this long before the rocket flips. */
+const TUMBLE_HOLD_S = 0.5;
+/** Guidance keeps dynamic pressure × angle of attack under this (Pa·rad). */
+const Q_ALPHA_LIMIT = 1000;
+const CHECK_START_S = 8;
+const CHECK_EVERY_S = 9;
+const GLITCH_RESET_S = 6;
+const CHECK_ORDER: SystemName[] = ['engines', 'tanks', 'power', 'guidance', 'comms'];
 
 export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = {}): FlightRecord {
   const vehicle = buildVehicle(spec, catalog);
@@ -84,7 +102,16 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
     firstStagingTimeS: null,
     guidanceActive: false,
     kickDone: false,
+    enginesOut: vehicle.stages.map(() => 0),
+    stageIgnitionS: vehicle.stages.map((_, i) => (i === 0 ? 0 : Infinity)),
   };
+  const faults = opts.faults ?? [];
+  const faultApplied = faults.map(() => false);
+  const separations: Separation[] = [];
+  const checklist: ChecklistItem[] = [];
+  let checksDone = 0;
+  let tumbleTimer = 0;
+  let maxTumble = 0;
 
   const start = opts.initial ?? { xM: 0, yM: R_EARTH_M, vxMS: omega * R_EARTH_M, vyMS: 0 };
   let t = 0;
@@ -110,6 +137,14 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
 
   const boosters = () => vehicle.stages[cfg.stageIndex]?.boosters;
 
+  /** Share of a stage's engines still running after faults. */
+  const working = (i: number) => {
+    const n = vehicle.stages[i]?.engines.reduce((a, g) => a + g.count, 0) ?? 0;
+    return n > 0 ? Math.max(0, (n - cfg.enginesOut[i]) / n) : 0;
+  };
+  /** Propellant the ascent may burn: the landing reserve stays in the tank. */
+  const usable = (i: number) => Math.max(0, cfg.stagePropKg[i] - vehicle.stages[i].landingReserveKg);
+
   function throttleFor(qPa: number): number {
     const mq = mission.maxQThrottle;
     if (!mq || qPa < mq.aboveQPa) return 1;
@@ -120,22 +155,23 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
   /** Liquid-stage mass flow (constant over a step for a given throttle). */
   function stageMassFlow(throttle: number): number {
     const stage = vehicle.stages[cfg.stageIndex];
-    if (!stage || !cfg.engineOn || cfg.stagePropKg[cfg.stageIndex] <= 0) return 0;
+    if (!stage || !cfg.engineOn || usable(cfg.stageIndex) <= 0) return 0;
     let mdot = 0;
     for (const g of stage.engines)
       mdot += (g.count * throttle * g.engine.thrustVacuumN) / (g.engine.ispVacuumS * G0_MS2);
-    return mdot;
+    return mdot * working(cfg.stageIndex);
   }
 
   function propulsion(pressurePa: number, throttle: number, boosterTimeS: number) {
     let thrustN = 0;
     let mdot = 0;
     const stage = vehicle.stages[cfg.stageIndex];
-    if (stage && cfg.engineOn && cfg.stagePropKg[cfg.stageIndex] > 0) {
+    if (stage && cfg.engineOn && usable(cfg.stageIndex) > 0) {
+      const w = working(cfg.stageIndex);
       for (const g of stage.engines) {
         const fVac = throttle * g.engine.thrustVacuumN;
-        thrustN += g.count * Math.max(0, fVac - pressurePa * g.exitAreaM2);
-        mdot += (g.count * fVac) / (g.engine.ispVacuumS * G0_MS2);
+        thrustN += w * g.count * Math.max(0, fVac - pressurePa * g.exitAreaM2);
+        mdot += (w * g.count * fVac) / (g.engine.ispVacuumS * G0_MS2);
       }
     }
     const b = boosters();
@@ -152,6 +188,52 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
     return [st[2] - omega * st[1], st[3] + omega * st[0]];
   }
 
+  /** Most turning push the engines (by swivelling) and thrusters can give, about the centre of mass. */
+  function steeringMomentNm(pressurePa: number, throttle: number, comM: number, lengthM: number, massKg: number) {
+    let moment = RCS_FRACTION * massKg * G0_MS2 * lengthM;
+    const stage = vehicle.stages[cfg.stageIndex];
+    if (stage && cfg.engineOn && usable(cfg.stageIndex) > 0) {
+      const w = working(cfg.stageIndex);
+      for (const g of stage.engines) {
+        const f = w * g.count * Math.max(0, throttle * g.engine.thrustVacuumN - pressurePa * g.exitAreaM2);
+        moment += f * Math.sin(g.gimbalRad) * Math.max(0, comM - stage.bottomM);
+      }
+    }
+    const b = boosters();
+    if (b && cfg.boostersAttached && cfg.boosterElapsedS < b.booster.burnTimeS) {
+      const f = b.count * Math.max(0, b.vacuumThrustAt(cfg.boosterElapsedS / b.booster.burnTimeS) - pressurePa * b.booster.nozzleExitAreaM2);
+      moment += f * Math.sin(b.gimbalRad) * Math.max(0, comM - (stage?.bottomM ?? 0));
+    }
+    return moment;
+  }
+
+  function stackState() {
+    const b = boosters();
+    return {
+      stageIndex: cfg.stageIndex,
+      boostersAttached: cfg.boostersAttached && !!b,
+      boosterPropFraction: b ? 1 - b.propellantUsedAt(cfg.boosterElapsedS / b.booster.burnTimeS) : 0,
+      stagePropKg: cfg.stagePropKg,
+      jettisoned: cfg.jettisoned,
+    };
+  }
+
+  /** Angle of attack (with the design gust) and how close the air is to flipping the rocket. */
+  function tumbleCheck(st: State, u: [number, number], throttle: number) {
+    const alt = Math.hypot(st[0], st[1]) - R_EARTH_M;
+    const a = atmo(alt);
+    const [vax, vay] = airVelocity(st);
+    const vAir = Math.hypot(vax, vay);
+    if (vAir < 30 || a.densityKgM3 <= 0) return { aoaRad: 0, ratio: 0 };
+    const cosA = clamp((u[0] * vax + u[1] * vay) / vAir, -1, 1);
+    const aoaRad = Math.acos(cosA) + Math.atan(DESIGN_GUST_MS / vAir);
+    const q = 0.5 * a.densityKgM3 * vAir * vAir;
+    const stab = stability(vehicle, stackState(), vAir / a.speedOfSoundMS, aoaRad);
+    const twist = aeroMomentNm(stab, q, aoaRad);
+    if (twist <= 0) return { aoaRad, ratio: 0 };
+    return { aoaRad, ratio: twist / steeringMomentNm(a.pressurePa, throttle, stab.comM, stab.lengthM, st[4]) };
+  }
+
   // ---------- guidance ----------
 
   /** Burn time needed for a given delta-v, walking up through the remaining stages. */
@@ -164,10 +246,10 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
       let thrust = 0;
       let mdot = 0;
       for (const g of stage.engines) {
-        thrust += g.count * g.engine.thrustVacuumN;
-        mdot += (g.count * g.engine.thrustVacuumN) / (g.engine.ispVacuumS * G0_MS2);
+        thrust += working(i) * g.count * g.engine.thrustVacuumN;
+        mdot += (working(i) * g.count * g.engine.thrustVacuumN) / (g.engine.ispVacuumS * G0_MS2);
       }
-      const prop = cfg.stagePropKg[i];
+      const prop = usable(i);
       if (mdot <= 0 || prop <= 0) continue;
       const ve = thrust / mdot;
       const stageDv = ve * Math.log(m / (m - prop));
@@ -210,7 +292,16 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
       const aThrust = thrustN / st[4];
       const sinPitch = aThrust > 0 ? clamp(arCmd / aThrust, -0.5, 0.9) : 0;
       const cosPitch = Math.sqrt(1 - sinPitch * sinPitch);
-      return [up[0] * sinPitch + east[0] * cosPitch, up[1] * sinPitch + east[1] * cosPitch];
+      const cmd: [number, number] = [up[0] * sinPitch + east[0] * cosPitch, up[1] * sinPitch + east[1] * cosPitch];
+      // While the air is still thick, don't swing the nose far from the airflow.
+      const q = 0.5 * atmo(alt).densityKgM3 * vAir * vAir;
+      if (vAir < 1 || q * Math.PI <= Q_ALPHA_LIMIT) return cmd;
+      const velAng = Math.atan2(vay, vax);
+      const diff = wrapAngle(Math.atan2(cmd[1], cmd[0]) - velAng);
+      const maxA = Q_ALPHA_LIMIT / q;
+      if (Math.abs(diff) <= maxA) return cmd;
+      const ang = velAng + Math.sign(diff) * maxA;
+      return [Math.cos(ang), Math.sin(ang)];
     }
 
     if (t < kickStart) return up;
@@ -300,6 +391,7 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
   // ---------- main loop ----------
 
   const record = (u: [number, number], throttle: number) => {
+    const tc = liftedOff || !onPad ? tumbleCheck(s, u, throttle) : { aoaRad: 0, ratio: 0 };
     const r = Math.hypot(s[0], s[1]);
     const alt = r - R_EARTH_M;
     const a = atmo(alt);
@@ -350,6 +442,8 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
       ],
       perigeeAltM: orbit.perigeeAltM,
       apogeeAltM: orbit.apogeeAltM,
+      aoaDeg: (tc.aoaRad * 180) / Math.PI,
+      tumbleRatio: tc.ratio,
     });
     lastSampleT = t;
     if (q > maxQ) {
@@ -379,6 +473,48 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
     endTime = Math.min(maxTime, t + (opts.coastAfterOrbitS ?? COAST_AFTER_ORBIT_S));
   };
 
+  function systemCheck(system: SystemName, tS: number): ChecklistItem {
+    if (system === 'engines') {
+      const out = cfg.enginesOut.map((n, i) => ({ n, i })).filter((x) => x.n > 0);
+      if (out.length)
+        return {
+          system,
+          tS,
+          status: 'fault',
+          note: out.map((x) => `${x.n} ${vehicle.stages[x.i].name} engine${x.n > 1 ? 's' : ''} failed; the others burned longer to make up for it`).join('. '),
+        };
+      return { system, tS, status: 'go', note: 'All engines ran normally' };
+    }
+    if (system === 'tanks') {
+      const leak = faults.find((f) => f.kind === 'leak');
+      if (leak && leak.kind === 'leak' && outcome?.success) {
+        const top = cfg.stageIndex;
+        const lostKg = cfg.stagePropKg[top] * leak.fraction;
+        const before = outcome.remainingDeltaVMS;
+        cfg.stagePropKg[top] -= lostKg;
+        outcome.remainingPropellantKg = cfg.stagePropKg[top];
+        outcome.remainingDeltaVMS = remainingDeltaV(vehicle, cfg);
+        return {
+          system,
+          tS,
+          status: 'fault',
+          note: `Leak! Lost ${(lostKg / 1000).toFixed(1)} t of propellant (${(before - outcome.remainingDeltaVMS).toFixed(0)} m/s of delta-v)`,
+        };
+      }
+      return { system, tS, status: 'go', note: 'Pressures normal, no leaks' };
+    }
+    const glitch = faults.find((f) => f.kind === 'glitch' && f.system === system);
+    if (glitch)
+      return {
+        system,
+        tS,
+        status: 'fault',
+        note: { power: 'Battery bus dropped out; switched to the backup', guidance: 'Navigation computer froze; rebooted', comms: 'Lost signal; switched to the backup antenna' }[system as 'power' | 'guidance' | 'comms'],
+        clearedTS: tS + GLITCH_RESET_S,
+      };
+    return { system, tS, status: 'go', note: { power: 'Batteries and solar normal', guidance: 'Navigation locked on', comms: 'Loud and clear' }[system as 'power' | 'guidance' | 'comms'] };
+  }
+
   record(attitude(s, 0), 1);
 
   while (t < endTime - 1e-9) {
@@ -400,7 +536,7 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
     // Land exactly on burnout and jettison events.
     const thr = throttleFor(0);
     const mdot = stageMassFlow(thr);
-    if (mdot > 0) dt = Math.min(dt, cfg.stagePropKg[cfg.stageIndex] / mdot);
+    if (mdot > 0) dt = Math.min(dt, usable(cfg.stageIndex) / mdot);
     const b = boosters();
     if (b && cfg.boostersAttached) dt = Math.min(dt, b.booster.burnTimeS - cfg.boosterElapsedS);
     if (cfg.firstStagingTimeS !== null) {
@@ -434,8 +570,9 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
     // Commit.
     s = next;
     t += dt;
-    if (cfg.engineOn) cfg.stagePropKg[cfg.stageIndex] = Math.max(0, cfg.stagePropKg[cfg.stageIndex] - stageUsed);
-    if (cfg.stagePropKg[cfg.stageIndex] < 1e-6) cfg.stagePropKg[cfg.stageIndex] = 0;
+    const reserveKg = vehicle.stages[cfg.stageIndex]?.landingReserveKg ?? 0;
+    if (cfg.engineOn) cfg.stagePropKg[cfg.stageIndex] = Math.max(reserveKg, cfg.stagePropKg[cfg.stageIndex] - stageUsed);
+    if (usable(cfg.stageIndex) < 1e-6) cfg.stagePropKg[cfg.stageIndex] = reserveKg;
     if (b && cfg.boostersAttached) cfg.boosterElapsedS += dt;
 
     const r = Math.hypot(s[0], s[1]);
@@ -450,16 +587,45 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
     }
 
     // ---- events ----
+    const separate = (kind: Separation['kind']) =>
+      separations.push({
+        kind,
+        stageIndex: cfg.stageIndex,
+        tS: t,
+        xM: s[0],
+        yM: s[1],
+        vxMS: s[2],
+        vyMS: s[3],
+        propellantKg: kind === 'stage' ? cfg.stagePropKg[cfg.stageIndex] : 0,
+      });
+
+    faults.forEach((f, i) => {
+      if (faultApplied[i] || f.kind !== 'engineOut' || f.stageIndex !== cfg.stageIndex || !cfg.engineOn || outcome) return;
+      if (t < cfg.stageIgnitionS[f.stageIndex] + f.afterIgnitionS) return;
+      faultApplied[i] = true;
+      const stage = vehicle.stages[f.stageIndex];
+      const n = stage.engines.reduce((a, g) => a + g.count, 0);
+      const lost = Math.min(n - cfg.enginesOut[f.stageIndex], f.engines);
+      cfg.enginesOut[f.stageIndex] += lost;
+      event('engineOut', lost >= n ? `${stage.name}: all engines out!` : `${stage.name}: ${lost} of ${n} engines out`);
+    });
+
     if (b && cfg.boostersAttached && cfg.boosterElapsedS >= b.booster.burnTimeS - 1e-9) {
       cfg.boostersAttached = false;
+      separate('boosters');
       event('boosterSeparation', 'Booster separation');
     }
 
-    if (cfg.engineOn && cfg.stagePropKg[cfg.stageIndex] <= 0) {
+    const boostersBurning = !!b && cfg.boostersAttached;
+    const stageDead = working(cfg.stageIndex) === 0 && !boostersBurning;
+    if (cfg.engineOn && (usable(cfg.stageIndex) <= 0 || stageDead)) {
       const stage = vehicle.stages[cfg.stageIndex];
-      event('stageBurnout', `${stage.name} burnout`);
+      event('stageBurnout', stageDead && usable(cfg.stageIndex) > 0 ? `${stage.name} engines dead: staging early` : `${stage.name} burnout`);
       if (cfg.stageIndex < vehicle.stages.length - 1) {
+        if (cfg.boostersAttached && b) separate('boosters');
+        separate('stage');
         cfg.stageIndex++;
+        cfg.stageIgnitionS[cfg.stageIndex] = t;
         cfg.boostersAttached = !!vehicle.stages[cfg.stageIndex].boosters;
         cfg.boosterElapsedS = 0;
         if (cfg.firstStagingTimeS === null) cfg.firstStagingTimeS = t;
@@ -529,6 +695,46 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
       }
     }
 
+    // Tumbling: the air twists the rocket harder than the steering can hold, for a moment.
+    if (!outcome) {
+      const tc = tumbleCheck(s, u, throttle);
+      maxTumble = Math.max(maxTumble, tc.ratio);
+      tumbleTimer = tc.ratio > 1 ? tumbleTimer + dt : 0;
+      if (tumbleTimer >= TUMBLE_HOLD_S) {
+        const stab = stability(vehicle, stackState(), Math.hypot(vax, vay) / a.speedOfSoundMS, tc.aoaRad);
+        fail(
+          {
+            type: 'tumble',
+            tS: t,
+            detail: {
+              ratio: tc.ratio,
+              aoaDeg: (tc.aoaRad * 180) / Math.PI,
+              dynamicPressurePa: q,
+              altitudeM: altNow,
+              comM: stab.comM - stab.baseM,
+              copM: stab.copM - stab.baseM,
+              enginesRunning: cfg.engineOn ? 1 : 0,
+              stageIndex: cfg.stageIndex,
+            },
+          },
+          'Tumbled out of control',
+          POST_FAILURE_COAST_S,
+        );
+      }
+    }
+
+    // Systems check while coasting in orbit.
+    if (outcome?.success && checksDone < CHECK_ORDER.length) {
+      const orbitT = events.find((e) => e.type === 'orbit')!.tS;
+      const due = orbitT + CHECK_START_S + checksDone * CHECK_EVERY_S;
+      if (t >= due) {
+        const item = systemCheck(CHECK_ORDER[checksDone], due);
+        checklist.push(item);
+        events.push({ tS: t, type: 'systemCheck', label: `${item.system[0].toUpperCase()}${item.system.slice(1)}: ${item.status === 'go' ? 'GO' : 'FAULT'}`, stageIndex: cfg.stageIndex });
+        checksDone++;
+      }
+    }
+
     // Mass bookkeeping is authoritative: whatever is still attached, with what is left in it.
     s[4] = massOf(vehicle, cfg);
 
@@ -563,6 +769,13 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
       );
   }
 
+  // A failure after an engine-out fault is the fault's doing.
+  const o = outcome as Outcome | null;
+  const outEvent = events.find((e) => e.type === 'engineOut');
+  if (o?.failure && outEvent && (o.failure.type === 'outOfFuel' || o.failure.type === 'crash')) {
+    o.failure = { type: 'engineFailure', tS: o.failure.tS, detail: { ...o.failure.detail, faultTimeS: outEvent.tS, fault: outEvent.label, stageIndex: outEvent.stageIndex } };
+  }
+
   if (maxQ > 0 && liftedOff) {
     events.push({ tS: maxQT, type: 'maxQ', label: 'Max-Q', stageIndex: 0 });
     events.sort((a, b) => a.tS - b.tS);
@@ -583,6 +796,11 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
       maxQTimeS: maxQT,
       maxQAltitudeM: maxQAlt,
       maxGLoad: maxG,
+      maxTumbleRatio: maxTumble,
+      staticMarginCalibers: (() => {
+        const st = stability(vehicle, { stageIndex: 0, boostersAttached: true, boosterPropFraction: 1, stagePropKg: vehicle.stages.map((x) => x.propellantKg), jettisoned: vehicle.jettisonables.map(() => false) }, 0.5, 0.03);
+        return (st.comM - st.copM) / vehicle.maxDiameterM;
+      })(),
       structuralLimitPa: structuralLimit(vehicle, {
         ...cfg,
         stageIndex: 0,
@@ -590,6 +808,9 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
       }),
     },
     durationS: t,
+    separations,
+    faults,
+    checklist,
   };
 }
 
@@ -635,7 +856,7 @@ function remainingDeltaV(vehicle: Vehicle, cfg: Config): number {
   for (let i = cfg.stageIndex; i < vehicle.stages.length; i++) {
     const c = { ...cfg, stageIndex: i, boostersAttached: false };
     const m0 = massOf(vehicle, c);
-    const prop = cfg.stagePropKg[i];
+    const prop = cfg.stagePropKg[i] - vehicle.stages[i].landingReserveKg;
     const stage = vehicle.stages[i];
     if (!stage.engines.length || prop <= 0) continue;
     let thrust = 0;

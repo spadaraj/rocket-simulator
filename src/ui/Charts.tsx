@@ -22,14 +22,31 @@ interface Metric {
   unit: string;
   get: (s: Sample) => number;
   digits: number;
+  /** A red dashed line the value must stay under. */
+  limit?: { value: (r: FlightRecord) => number; label: string };
 }
 
 const METRICS: Metric[] = [
   { key: 'alt', title: 'Altitude', unit: 'km', get: (s) => s.altitudeM / 1000, digits: 1 },
   { key: 'speed', title: 'Speed (inertial)', unit: 'm/s', get: (s) => s.speedMS, digits: 0 },
   { key: 'g', title: 'Acceleration', unit: 'g', get: (s) => s.gLoad, digits: 2 },
-  { key: 'q', title: 'Dynamic pressure', unit: 'kPa', get: (s) => s.dynamicPressurePa / 1000, digits: 1 },
+  {
+    key: 'q',
+    title: 'Dynamic pressure',
+    unit: 'kPa',
+    get: (s) => s.dynamicPressurePa / 1000,
+    digits: 1,
+    limit: { value: (r) => r.summary.structuralLimitPa / 1000, label: 'structural limit' },
+  },
   { key: 'mass', title: 'Mass', unit: 't', get: (s) => s.massKg / 1000, digits: 0 },
+  {
+    key: 'tumble',
+    title: 'Air twist vs steering',
+    unit: '%',
+    get: (s) => s.tumbleRatio * 100,
+    digits: 0,
+    limit: { value: () => 100, label: 'tumbles above' },
+  },
 ];
 
 const AXIS = { stroke: '#9fb3d1', grid: { stroke: 'rgba(255,255,255,0.07)', width: 1 }, ticks: { stroke: 'rgba(255,255,255,0.15)' } };
@@ -46,7 +63,7 @@ function alignedData(runs: Run[], metric: Metric): uPlot.AlignedData {
 }
 
 /** Vertical event markers for the primary run, plus an optional horizontal limit. */
-function markersPlugin(record: FlightRecord, limit?: number): uPlot.Plugin {
+function markersPlugin(record: FlightRecord, limit?: number, limitLabel = ''): uPlot.Plugin {
   return {
     hooks: {
       draw: (u) => {
@@ -55,7 +72,7 @@ function markersPlugin(record: FlightRecord, limit?: number): uPlot.Plugin {
         ctx.save();
         ctx.lineWidth = 1 * devicePixelRatio;
         for (const e of record.events) {
-          if (!['maxQ', 'boosterSeparation', 'staging', 'failure', 'engineCutoff'].includes(e.type)) continue;
+          if (!['maxQ', 'boosterSeparation', 'staging', 'failure', 'engineCutoff', 'engineOut'].includes(e.type)) continue;
           const x = u.valToPos(e.tS, 'x', true);
           if (x < left || x > left + width) continue;
           ctx.strokeStyle = e.type === 'failure' ? '#ff6b6b' : 'rgba(232,238,247,0.35)';
@@ -78,7 +95,7 @@ function markersPlugin(record: FlightRecord, limit?: number): uPlot.Plugin {
             ctx.fillStyle = '#ff9b9b';
             ctx.font = `${11 * devicePixelRatio}px system-ui, sans-serif`;
             ctx.textAlign = 'right';
-            ctx.fillText('structural limit', left + width - 6 * devicePixelRatio, y - 4 * devicePixelRatio);
+            ctx.fillText(limitLabel, left + width - 6 * devicePixelRatio, y - 4 * devicePixelRatio);
           }
         }
         ctx.restore();
@@ -91,7 +108,7 @@ function TimeChart({ runs, metric }: { runs: Run[]; metric: Metric }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current!;
-    const limit = metric.key === 'q' ? runs[0].record.summary.structuralLimitPa / 1000 : undefined;
+    const limit = metric.limit?.value(runs[0].record);
     const opts: uPlot.Options = {
       width: el.clientWidth,
       height: 170,
@@ -111,7 +128,7 @@ function TimeChart({ runs, metric }: { runs: Run[]; metric: Metric }) {
           value: (_u: uPlot, v: number | null) => (v == null ? '—' : `${v.toFixed(metric.digits)} ${metric.unit}`),
         })),
       ],
-      plugins: [markersPlugin(runs[0].record, limit)],
+      plugins: [markersPlugin(runs[0].record, limit, metric.limit?.label)],
     };
     const u = new uPlot(opts, alignedData(runs, metric), el);
     const ro = new ResizeObserver(() => u.setSize({ width: el.clientWidth, height: 170 }));
@@ -200,6 +217,8 @@ export function downloadCsv(record: FlightRecord) {
     ['stage', (s) => s.stageIndex],
     ['perigee_alt_m', (s) => (Number.isFinite(s.perigeeAltM) ? s.perigeeAltM.toFixed(0) : '')],
     ['apogee_alt_m', (s) => (Number.isFinite(s.apogeeAltM) ? s.apogeeAltM.toFixed(0) : '')],
+    ['angle_of_attack_deg', (s) => s.aoaDeg.toFixed(2)],
+    ['tumble_ratio', (s) => s.tumbleRatio.toFixed(4)],
   ];
   const lines = [cols.map((c) => c[0]).join(','), ...record.samples.map((s) => cols.map((c) => c[1](s)).join(','))];
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });

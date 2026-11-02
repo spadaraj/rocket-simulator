@@ -24,6 +24,8 @@ export function stageDeltaV(spec: RocketSpec, catalog: Catalog): StageDeltaV[] {
     let above = v.payloadMassKg + (i === 0 ? jettison : 0);
     for (let j = i + 1; j < v.stages.length; j++) above += v.stages[j].dryMassKg + v.stages[j].propellantKg;
     const st = v.stages[i];
+    // Landing fuel rides along but is not burned on the way up.
+    const burnKg = st.propellantKg - st.landingReserveKg;
     let thrust = 0;
     let mdot = 0;
     for (const g of st.engines) {
@@ -36,8 +38,8 @@ export function stageDeltaV(spec: RocketSpec, catalog: Catalog): StageDeltaV[] {
       const b = st.boosters;
       const bProp = b.count * b.booster.propellantKg;
       const bMdot = bProp / b.booster.burnTimeS;
-      const coreUsed = Math.min(st.propellantKg, mdot * b.booster.burnTimeS);
-      const mStart = m0 + b.count * (b.booster.massKg + b.booster.propellantKg);
+      const coreUsed = Math.min(burnKg, mdot * b.booster.burnTimeS);
+      const mStart = m0 + b.count * (b.dryMassKg + b.booster.propellantKg);
       const mEnd = mStart - bProp - coreUsed;
       const ve = (b.booster.ispVacuumS * G0_MS2 * bMdot + thrust) / (bMdot + mdot);
       out.push({
@@ -46,8 +48,8 @@ export function stageDeltaV(spec: RocketSpec, catalog: Catalog): StageDeltaV[] {
         ignitionMassKg: mStart,
         burnoutMassKg: mEnd,
       });
-      m0 = mEnd - b.count * b.booster.massKg;
-      const remaining = st.propellantKg - coreUsed;
+      m0 = mEnd - b.count * b.dryMassKg;
+      const remaining = burnKg - coreUsed;
       out.push({
         name: st.name,
         deltaVMS: mdot > 0 ? (thrust / mdot) * Math.log(m0 / (m0 - remaining)) : 0,
@@ -58,9 +60,9 @@ export function stageDeltaV(spec: RocketSpec, catalog: Catalog): StageDeltaV[] {
     }
     out.push({
       name: st.name,
-      deltaVMS: mdot > 0 ? (thrust / mdot) * Math.log(m0 / (m0 - st.propellantKg)) : 0,
+      deltaVMS: mdot > 0 ? (thrust / mdot) * Math.log(m0 / (m0 - burnKg)) : 0,
       ignitionMassKg: m0,
-      burnoutMassKg: m0 - st.propellantKg,
+      burnoutMassKg: m0 - burnKg,
     });
   }
   return out;

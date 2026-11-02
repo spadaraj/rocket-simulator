@@ -282,11 +282,11 @@ This weekend's goal: Roscoe presses Launch on a rough A1-39 and watches it fly t
 
 **Phase 3: the full mission**
 
-- [ ] Coasting systems checklist and Chaos Mode faults
-- [ ] Booster parachute recovery and core-stage powered landing
-- [ ] Re-entry heating and crew g-loads
-- [ ] Tumbling failure (centre of mass vs. centre of pressure, steering authority)
-- [ ] Moon leg as a delta-v ledger with animation
+- [x] Coasting systems checklist and Chaos Mode faults
+- [x] Booster parachute recovery and core-stage powered landing
+- [x] Re-entry heating and crew g-loads
+- [x] Tumbling failure (centre of mass vs. centre of pressure, steering authority)
+- [x] Moon leg as a delta-v ledger with animation
 
 **Phase 4: realism and reach**
 

@@ -758,6 +758,7 @@ input {
 
 .rb-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 6px 0;
@@ -1126,6 +1127,322 @@ input {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* ---------- Phase 3: Chaos Mode, mission control, Moon leg, re-entry ---------- */
+
+.chaos-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: transparent;
+  padding: 8px 14px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.chaos-toggle.on {
+  background: rgba(255, 176, 46, 0.18);
+  border-color: var(--amber);
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.chaos-note {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--amber);
+  font-family: var(--font-fun);
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  padding: 14px 22px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 3px solid var(--amber);
+  font-family: var(--font-fun);
+  font-size: 24px;
+  animation: pop 0.4s ease-out;
+  pointer-events: none;
+}
+
+.mission-control {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: min(340px, calc(100% - 24px));
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 13px;
+  animation: pop 0.4s ease-out;
+}
+
+.mission-control.roscoe {
+  top: 84px;
+  left: 12px;
+  right: auto;
+  width: min(360px, calc(100% - 24px));
+  font-family: var(--font-fun);
+  font-size: 18px;
+  border: 2px solid var(--ink);
+}
+
+.mc-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.mission-control ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mission-control li {
+  display: grid;
+  grid-template-columns: 1.6em 1fr auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.mission-control li.pending {
+  opacity: 0.45;
+}
+
+.mission-control li.fault .mc-status,
+.mission-control li.fault .mc-note {
+  color: #ff8a8a;
+}
+
+.mc-note {
+  grid-column: 2 / -1;
+  color: var(--ink-dim);
+  font-size: 0.85em;
+}
+
+.skip {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+}
+
+.moon-leg,
+.reentry {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #050b1f;
+}
+
+.moon-svg,
+.reentry-svg {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.moon-label {
+  fill: var(--ink-dim);
+  font-size: 18px;
+}
+
+.moon-caption {
+  fill: #fff;
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--font-fun);
+}
+
+.moon-caption.bad {
+  fill: #ff8a8a;
+}
+
+.ledger {
+  list-style: none;
+  margin: 0;
+  padding: 10px 14px 56px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  background: var(--panel);
+}
+
+.ledger li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  opacity: 0.5;
+}
+
+.ledger li.shown {
+  opacity: 1;
+}
+
+.ledger li.now {
+  border-color: var(--amber);
+}
+
+.ledger li.bad {
+  border-color: #ff8a8a;
+}
+
+.moon-leg.roscoe .ledger-name {
+  font-family: var(--font-fun);
+  font-size: 17px;
+}
+
+.ledger-by,
+.ledger-num {
+  font-size: 12px;
+}
+
+.ledger-bar,
+.rg-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.ledger-bar span,
+.rg-bar span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+  transition: width 0.4s ease-out;
+}
+
+.ledger li.bad .ledger-bar span,
+.rg.warn .rg-bar span {
+  background: var(--red);
+}
+
+.reentry-gauges {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 10px 14px 56px;
+  background: var(--panel);
+}
+
+.rg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.rg b {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.reentry.roscoe .rg {
+  font-family: var(--font-fun);
+  font-size: 16px;
+}
+
+.reentry.roscoe .rg b {
+  font-size: 24px;
+}
+
+.rg.warn b {
+  color: #ff8a8a;
+}
+
+.mission-steps {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+
+.mission-steps.roscoe {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  font-size: 26px;
+}
+
+.mission-steps.roscoe li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+
+.mission-steps:not(.roscoe) li {
+  display: grid;
+  grid-template-columns: 1.6em auto 1fr;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 13px;
+  margin: 3px 0;
+}
+
+.mission-steps li.fail .ms-label {
+  color: #ff8a8a;
+}
+
+.ms-note {
+  font-size: 12px;
+}
+
+.result-replays {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.result-card.engineer .result-replays {
+  justify-content: flex-start;
+}
+
+.rb-toggle {
+  min-width: 96px;
+  height: 52px;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.rb-toggle.on {
+  background: var(--green);
+  border-color: #9ff0c0;
+  color: var(--bp-deep);
+}
+
+.rb-hint {
+  flex-basis: 100%;
+  text-align: right;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.fault-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
 /* ---------- narrow screens ---------- */
 
 @media (max-width: 820px) {
@@ -1176,5 +1493,12 @@ input {
   }
   .chart-grid {
     grid-template-columns: 1fr;
+  }
+  .reentry-gauges {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .mission-control.roscoe {
+    top: auto;
+    bottom: 150px;
   }
 }

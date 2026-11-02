@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { catalog, presets } from './data/catalog';
 import { stageDeltaV } from './physics/deltaV';
 import { setMission } from './physics/edit';
+import { rollFaults } from './physics/faults';
 import type { FixResult } from './physics/fixes';
-import { simulate } from './physics/simulate';
+import { flyMission } from './physics/mission';
 import type { RocketSpec } from './physics/types';
 import { buildVehicle } from './physics/vehicle';
 import { Charts, RUN_COLORS, type Run } from './ui/Charts';
@@ -11,7 +12,10 @@ import { Countdown } from './ui/Countdown';
 import { EngineerBuilder } from './ui/EngineerBuilder';
 import { EngineerPanel } from './ui/EngineerPanel';
 import { FlightCanvas } from './ui/FlightCanvas';
-import { feedbackFor } from './ui/messages';
+import { missionFeedback } from './ui/messages';
+import { MissionControl } from './ui/MissionControl';
+import { MoonLeg } from './ui/MoonLeg';
+import { ReentryView } from './ui/ReentryView';
 import { sampleAt, usePlayback } from './ui/playback';
 import { EngineerResult, RoscoeResult, type FixState } from './ui/ResultCard';
 import { RocketThumb } from './ui/RocketThumb';
@@ -21,7 +25,8 @@ import { StageStrip } from './ui/StageStrip';
 import { autoSizeAsync, findFixesAsync } from './ui/whatIf';
 
 type Mode = 'roscoe' | 'engineer';
-type Phase = 'ready' | 'countdown' | 'flying' | 'done';
+type Phase = 'ready' | 'countdown' | 'flying' | 'moon' | 'reentry' | 'done';
+type Scene = 'flight' | 'moon' | 'reentry';
 type Tab = 'build' | 'fly' | 'charts';
 
 const ROSCOE_SPEEDS = [
@@ -39,6 +44,16 @@ function loadMode(): Mode {
   }
 }
 
+function loadChaos(): boolean {
+  try {
+    return localStorage.getItem('chaos') === 'on';
+  } catch {
+    return false;
+  }
+}
+
+const newSeed = () => Math.floor(Math.random() * 2 ** 31);
+
 export default function App() {
   const [mode, setModeState] = useState<Mode>(loadMode);
   const [presetId, setPresetId] = useState(presets[0].id);
@@ -46,6 +61,9 @@ export default function App() {
   const [spec, setSpec] = useState<RocketSpec>(preset);
   const [tab, setTab] = useState<Tab>('fly');
   const [phase, setPhase] = useState<Phase>('ready');
+  const [doneScene, setDoneScene] = useState<Scene>('flight');
+  const [chaos, setChaosState] = useState(loadChaos);
+  const [seed, setSeed] = useState(newSeed);
   const [fix, setFix] = useState<FixState | undefined>();
   const [autoSizing, setAutoSizing] = useState(false);
   const [autoMessage, setAutoMessage] = useState<string | null>(null);
@@ -64,12 +82,24 @@ export default function App() {
     }
   };
 
+  const setChaos = (on: boolean) => {
+    setChaosState(on);
+    setSeed(newSeed());
+    try {
+      localStorage.setItem('chaos', on ? 'on' : 'off');
+    } catch {
+      /* storage unavailable: keep the in-memory choice */
+    }
+  };
+
   const vehicle = useMemo(() => buildVehicle(spec, catalog), [spec]);
-  const record = useMemo(() => simulate(spec, catalog), [spec]);
+  const faults = useMemo(() => (chaos ? rollFaults(spec, catalog, seed) : []), [chaos, seed, spec]);
+  const mission = useMemo(() => flyMission(spec, catalog, { faults }), [spec, faults]);
+  const record = mission.ascent;
   const deltaV = useMemo(() => stageDeltaV(spec, catalog), [spec]);
   const thumbs = useMemo(() => Object.fromEntries(presets.map((p) => [p.id, buildVehicle(p, catalog)])), []);
-  const feedback = useMemo(() => feedbackFor(record), [record]);
-  const pb = usePlayback(record, 10);
+  const feedback = useMemo(() => missionFeedback(mission), [mission]);
+  const pb = usePlayback(mission, mission.flightDurationS, 10);
   const sample = sampleAt(record.samples, pb.t);
   const current: Run = useMemo(
     () => ({ id: 0, label: spec.name, color: RUN_COLORS[0], record }),
@@ -87,24 +117,38 @@ export default function App() {
   // right away so they are ready when the failure card appears.
   useEffect(() => {
     setPhase('ready');
-    const failure = record.outcome.failure;
+    setDoneScene('flight');
+    const failure = mission.result.failure;
     if (!failure) {
       setFix(undefined);
       return;
     }
     let live = true;
     setFix({ status: 'working', fixes: [], tested: 0 });
-    findFixesAsync(spec, failure.type).then((r) => {
+    findFixesAsync(spec, failure.type, failure.detail, faults).then((r) => {
       if (live) setFix({ status: 'done', ...r });
     });
     return () => {
       live = false;
     };
-  }, [record]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mission]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The story after the launch: the Moon trip, then coming home.
+  const finish = (scene: Scene) => {
+    setDoneScene(scene);
+    setPhase('done');
+  };
+  const afterFlight = () => {
+    if (!record.outcome.success) return finish('flight');
+    if (mission.moon) return setPhase('moon');
+    if (mission.reentry) return setPhase('reentry');
+    finish('flight');
+  };
+  const afterMoon = () => (mission.moon?.success && mission.reentry ? setPhase('reentry') : finish('moon'));
 
   useEffect(() => {
-    if (phase === 'flying' && !pb.playing && pb.t >= record.durationS) setPhase('done');
-  }, [phase, pb.playing, pb.t, record.durationS]);
+    if (phase === 'flying' && !pb.playing && pb.t >= mission.flightDurationS) afterFlight();
+  }, [phase, pb.playing, pb.t, mission.flightDurationS]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startFlight = useCallback(() => {
     setPhase('flying');
@@ -121,6 +165,9 @@ export default function App() {
     pb.pause();
     pb.seek(0);
     setPhase('ready');
+    setDoneScene('flight');
+    // Chaos Mode: a new surprise every flight.
+    if (chaos) setSeed(newSeed());
   };
 
   const tryFix = (f: FixResult) => {
@@ -134,7 +181,8 @@ export default function App() {
     autoSizeAsync(spec).then((r) => {
       setAutoSizing(false);
       setAutoMessage(r.message);
-      if (r.ok) setSpec(r.spec);
+      // Even when the Moon is out of reach, keep the landing fuel it worked out.
+      if (r.spec !== spec) setSpec(r.spec);
     });
   };
 
@@ -146,6 +194,20 @@ export default function App() {
     const n = runId.current++;
     setSaved([...saved, { id: n, label: `${spec.name}${modified ? ' (modified)' : ''} #${n}`, color, record }]);
   };
+
+  const scene: Scene = phase === 'moon' ? 'moon' : phase === 'reentry' ? 'reentry' : phase === 'done' ? doneScene : 'flight';
+
+  // Roscoe gets a big message when something surprising happens mid-flight.
+  const toastEvent = record.events.find((e) => e.type === 'engineOut' && pb.t >= e.tS && pb.t < e.tS + 5);
+  const toast = toastEvent ? 'Uh oh! An engine stopped! 😬' : null;
+
+  const replays: { label: string; onClick: () => void }[] = [
+    { label: roscoe ? '🚀 Watch the launch' : 'Replay launch', onClick: () => (setPhase('flying'), pb.seek(0), pb.play()) },
+    ...(mission.moon ? [{ label: roscoe ? '🌕 Watch the Moon trip' : 'Replay Moon leg', onClick: () => setPhase('moon') }] : []),
+    ...(mission.reentry && (!mission.moon || mission.moon.success)
+      ? [{ label: roscoe ? '🔥 Watch coming home' : 'Replay re-entry', onClick: () => setPhase('reentry') }]
+      : []),
+  ];
 
   const speeds = roscoe ? ROSCOE_SPEEDS.map((s) => s.speed) : ENGINEER_SPEEDS;
   useEffect(() => {
@@ -188,6 +250,14 @@ export default function App() {
             </button>
           ))}
         </div>
+        <button
+          className={`chaos-toggle ${chaos ? 'on' : ''}`}
+          onClick={() => setChaos(!chaos)}
+          aria-pressed={chaos}
+          title="Chaos Mode: something random goes wrong on each flight"
+        >
+          🎲 Chaos{chaos ? ' on' : ''}
+        </button>
         <div className="mode-toggle" role="group" aria-label="Mode">
           <button className={roscoe ? 'on' : ''} onClick={() => setMode('roscoe')}>
             Roscoe
@@ -238,38 +308,58 @@ export default function App() {
       {tab === 'fly' && (
         <main className="stage">
           <div className="view">
-            <FlightCanvas
-              record={record}
-              vehicle={vehicle}
-              tRef={pb.tRef}
-              launchSite={spec.launchSite}
-              roscoe={roscoe}
-              armed={phase === 'flying' || phase === 'done'}
-            />
-
-            {roscoe && (
-              <StageStrip
-                vehicle={vehicle}
-                sample={sample}
-                started={phase !== 'ready' && phase !== 'countdown'}
-                live={phase === 'flying' && pb.t < record.durationS}
-              />
+            {scene === 'flight' && (
+              <>
+                <FlightCanvas
+                  record={record}
+                  vehicle={vehicle}
+                  tRef={pb.tRef}
+                  launchSite={spec.launchSite}
+                  roscoe={roscoe}
+                  armed={phase !== 'ready' && phase !== 'countdown'}
+                  recoveries={mission.recoveries}
+                />
+                {roscoe && (
+                  <StageStrip
+                    vehicle={vehicle}
+                    sample={sample}
+                    started={phase !== 'ready' && phase !== 'countdown'}
+                    live={phase === 'flying' && pb.t < record.durationS}
+                  />
+                )}
+                {roscoe && phase !== 'ready' && <RoscoeDials sample={sample} />}
+                {phase !== 'ready' && phase !== 'countdown' && <MissionControl items={record.checklist} t={pb.t} roscoe={roscoe} />}
+                {roscoe && phase === 'flying' && toast && <div className="toast">{toast}</div>}
+              </>
             )}
-            {roscoe && phase !== 'ready' && <RoscoeDials sample={sample} />}
+            {scene === 'moon' && mission.moon && (
+              <MoonLeg ledger={mission.moon} roscoe={roscoe} legSeconds={roscoe ? 3.4 : 2.2} onDone={phase === 'moon' ? afterMoon : () => {}} />
+            )}
+            {scene === 'reentry' && mission.reentry && (
+              <ReentryView record={mission.reentry} roscoe={roscoe} sceneSeconds={roscoe ? 24 : 14} onDone={phase === 'reentry' ? () => finish('reentry') : () => {}} />
+            )}
+            {(phase === 'moon' || phase === 'reentry') && (
+              <button className="btn small skip" onClick={phase === 'moon' ? afterMoon : () => finish('reentry')}>
+                Skip ⏭
+              </button>
+            )}
 
             {phase === 'ready' && (
               <div className="launch-wrap">
                 <button className="launch-btn" onClick={launch}>
                   LAUNCH
                 </button>
+                {chaos && <div className="chaos-note">🎲 Chaos Mode is on: something might go wrong!</div>}
               </div>
             )}
 
             {phase === 'countdown' && <Countdown from={10} onDone={startFlight} voice={roscoe} />}
 
-            {phase === 'done' && roscoe && <RoscoeResult fb={feedback} fix={fix} onAgain={again} onTryFix={tryFix} />}
+            {phase === 'done' && roscoe && (
+              <RoscoeResult fb={feedback} fix={fix} steps={mission.result.steps} replays={replays} onAgain={again} onTryFix={tryFix} />
+            )}
 
-            {phase !== 'ready' && phase !== 'countdown' && (
+            {scene === 'flight' && (phase === 'flying' || phase === 'done') && (
               <div className="controls">
                 <button className="btn" onClick={pb.playing ? pb.pause : pb.play} aria-label={pb.playing ? 'Pause' : 'Play'}>
                   {pb.playing ? '⏸' : '▶'}
@@ -294,7 +384,7 @@ export default function App() {
                   className="scrubber"
                   type="range"
                   min={0}
-                  max={record.durationS}
+                  max={mission.flightDurationS}
                   step={0.1}
                   value={pb.t}
                   onChange={(e) => {
@@ -310,16 +400,20 @@ export default function App() {
 
           {!roscoe && (
             <aside className="side">
-              {phase === 'done' && <EngineerResult fb={feedback} fix={fix} onAgain={launch} onTryFix={tryFix} />}
+              {phase === 'done' && (
+                <EngineerResult fb={feedback} fix={fix} steps={mission.result.steps} replays={replays} onAgain={again} onTryFix={tryFix} />
+              )}
               <EngineerPanel
                 record={record}
+                mission={mission}
                 vehicle={vehicle}
                 sample={sample}
+                t={pb.t}
                 deltaV={deltaV}
-                mission={spec.mission}
+                missionSpec={spec.mission}
                 setMission={(patch) => setSpec(setMission(spec, patch))}
                 onSeek={(t) => {
-                  if (phase === 'ready' || phase === 'countdown') setPhase('flying');
+                  if (phase === 'ready' || phase === 'countdown' || phase === 'done') setPhase('flying');
                   pb.seek(t);
                 }}
               />

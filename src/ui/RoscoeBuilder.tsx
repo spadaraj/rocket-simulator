@@ -2,7 +2,23 @@
 
 import { catalog } from '../data/catalog';
 import { LEO_BUDGET_MS, TLI_BUDGET_MS, type StageDeltaV } from '../physics/deltaV';
-import { addStage, liquidEngines, removeStage, setBoosters, setEngine, setEngineCount, setTank, stageEngine, stageFill, stageTank } from '../physics/edit';
+import {
+  addStage,
+  finScale,
+  liquidEngines,
+  removeStage,
+  setBoosterRecovery,
+  setBoosters,
+  setEngine,
+  setEngineCount,
+  setFins,
+  setHeatShield,
+  setRecovery,
+  setTank,
+  stageEngine,
+  stageFill,
+  stageTank,
+} from '../physics/edit';
 import type { RocketSpec } from '../physics/types';
 import type { Vehicle } from '../physics/vehicle';
 import { RocketThumb } from './RocketThumb';
@@ -24,6 +40,31 @@ const ENGINES = liquidEngines(catalog);
 const BOOSTERS = ['srb-sls-5seg', 'srb-shuttle'];
 const BOOSTER_NAMES: Record<string, string> = { 'srb-sls-5seg': 'SLS boosters', 'srb-shuttle': 'Shuttle boosters' };
 const shortName = (name: string) => name.replace(/^(SpaceX|Blue Origin|Rocketdyne) /, '');
+const FIN_SIZES = [
+  { scale: 0, label: 'No fins' },
+  { scale: 0.6, label: 'Small' },
+  { scale: 1, label: 'Normal' },
+  { scale: 1.6, label: 'Big' },
+];
+const SHIELDS = [
+  { scale: 1, label: 'Normal' },
+  { scale: 1.5, label: 'Thick' },
+  { scale: 2, label: 'Extra thick' },
+];
+/** First guess at landing fuel when Roscoe switches landing on; auto-size refines it. */
+const FIRST_RESERVE_SHARE = 0.2;
+
+function Toggle({ label, on, onChange, hint }: { label: string; on: boolean; onChange: (on: boolean) => void; hint?: string }) {
+  return (
+    <div className="rb-row">
+      <span className="rb-label">{label}</span>
+      <button className={`rb-toggle ${on ? 'on' : ''}`} onClick={() => onChange(!on)} aria-pressed={on}>
+        {on ? 'Yes' : 'No'}
+      </button>
+      {hint && <span className="rb-hint">{hint}</span>}
+    </div>
+  );
+}
 
 function Stepper({ label, value, onMinus, onPlus }: { label: string; value: string; onMinus: () => void; onPlus: () => void }) {
   return (
@@ -55,6 +96,8 @@ function Chooser({ label, value, onPrev, onNext }: { label: string; value: strin
   );
 }
 
+const nearestFin = (scale: number) => FIN_SIZES.reduce((a, b) => (Math.abs(b.scale - scale) < Math.abs(a.scale - scale) ? b : a));
+
 export function RoscoeBuilder(p: Props) {
   const { spec, setSpec } = p;
   const totalDv = p.deltaV.reduce((a, d) => a + d.deltaVMS, 0);
@@ -78,6 +121,12 @@ export function RoscoeBuilder(p: Props) {
         <div className="rb-card payload">
           <div className="rb-title">👩‍🚀 {spec.payload.name}</div>
           <div className="rb-note">Crew capsule, service module and Moon lander</div>
+          <Chooser
+            label="Heat shield"
+            value={(SHIELDS.find((x) => Math.abs(x.scale - (spec.payload.heatShieldScale ?? 1)) < 0.01) ?? SHIELDS[0]).label}
+            onPrev={() => setSpec(setHeatShield(spec, cycle(SHIELDS, SHIELDS.find((x) => Math.abs(x.scale - (spec.payload.heatShieldScale ?? 1)) < 0.01) ?? SHIELDS[0], -1).scale))}
+            onNext={() => setSpec(setHeatShield(spec, cycle(SHIELDS, SHIELDS.find((x) => Math.abs(x.scale - (spec.payload.heatShieldScale ?? 1)) < 0.01) ?? SHIELDS[0], 1).scale))}
+          />
         </div>
 
         {spec.stages.length < 4 && (
@@ -127,6 +176,24 @@ export function RoscoeBuilder(p: Props) {
                 />
               )}
               {i === 0 && (
+                <Chooser
+                  label="Fins"
+                  value={(FIN_SIZES.find((x) => Math.abs(x.scale - finScale(spec, catalog, 0)) < 0.05) ?? { label: `${finScale(spec, catalog, 0).toFixed(1)}×` }).label}
+                  onPrev={() => setSpec(setFins(spec, catalog, 0, cycle(FIN_SIZES, nearestFin(finScale(spec, catalog, 0)), -1).scale))}
+                  onNext={() => setSpec(setFins(spec, catalog, 0, cycle(FIN_SIZES, nearestFin(finScale(spec, catalog, 0)), 1).scale))}
+                />
+              )}
+              {i < spec.stages.length - 1 && (
+                <Toggle
+                  label="🦿 Land it"
+                  on={st.recovery === 'propulsive'}
+                  hint={st.recovery === 'propulsive' ? `Saves ${Math.round((st.landingReserveKg ?? 0) / 1000)} t of fuel` : undefined}
+                  onChange={(on) =>
+                    setSpec(on ? setRecovery(spec, i, 'propulsive', p.vehicle.stages[i].propellantKg * FIRST_RESERVE_SHARE) : setRecovery(spec, i, 'none'))
+                  }
+                />
+              )}
+              {i === 0 && (
                 <>
                   <Stepper
                     label="Boosters"
@@ -135,12 +202,19 @@ export function RoscoeBuilder(p: Props) {
                     onPlus={() => setSpec(setBoosters(spec, st.boosters?.part ?? BOOSTERS[0], Math.min(6, (st.boosters?.count ?? 0) + 2)))}
                   />
                   {st.boosters && (
-                    <Chooser
-                      label="Kind"
-                      value={BOOSTER_NAMES[st.boosters.part] ?? st.boosters.part}
-                      onPrev={() => setSpec(setBoosters(spec, cycle(BOOSTERS, st.boosters!.part, -1), st.boosters!.count))}
-                      onNext={() => setSpec(setBoosters(spec, cycle(BOOSTERS, st.boosters!.part, 1), st.boosters!.count))}
-                    />
+                    <>
+                      <Chooser
+                        label="Kind"
+                        value={BOOSTER_NAMES[st.boosters.part] ?? st.boosters.part}
+                        onPrev={() => setSpec(setBoosters(spec, cycle(BOOSTERS, st.boosters!.part, -1), st.boosters!.count))}
+                        onNext={() => setSpec(setBoosters(spec, cycle(BOOSTERS, st.boosters!.part, 1), st.boosters!.count))}
+                      />
+                      <Toggle
+                        label="🪂 Parachutes"
+                        on={st.boosters.recovery === 'parachute'}
+                        onChange={(on) => setSpec(setBoosterRecovery(spec, on ? 'parachute' : 'none'))}
+                      />
+                    </>
                   )}
                 </>
               )}
