@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { FixResult } from '../physics/fixes';
 import type { MissionStep } from '../physics/mission';
 import type { Feedback } from './messages';
@@ -38,6 +39,8 @@ interface CardProps {
   replays: { label: string; onClick: () => void }[];
   onAgain: () => void;
   onTryFix: (f: FixResult) => void;
+  /** Extra line under the steps (the real-flight badge). */
+  badge?: ReactNode;
 }
 
 const STEP_ICON: Record<MissionStep['id'], string> = { ascent: '🚀', systems: '🎧', recovery: '🪂', moon: '🌕', reentry: '🔥' };
@@ -61,7 +64,7 @@ function Steps({ steps, roscoe }: { steps: MissionStep[]; roscoe: boolean }) {
   );
 }
 
-export function RoscoeResult({ fb, fix, steps, replays, onAgain, onTryFix }: CardProps) {
+export function RoscoeResult({ fb, fix, steps, replays, onAgain, onTryFix, badge }: CardProps) {
   const best = fix?.status === 'done' ? fix.fixes[0] : undefined;
   const tip = best ? `Try this: ${best.roscoe.toLowerCase()}.` : fb.roscoeFix;
   return (
@@ -72,6 +75,7 @@ export function RoscoeResult({ fb, fix, steps, replays, onAgain, onTryFix }: Car
         {fb.roscoeTitle}
       </h2>
       <Steps steps={steps} roscoe />
+      {fb.success && badge}
       <p className="result-fix">{fix?.status === 'working' ? '🔧 Thinking of a fix…' : tip}</p>
       <div className="result-actions">
         {canSpeak && (

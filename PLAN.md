@@ -290,11 +290,11 @@ This weekend's goal: Roscoe presses Launch on a rough A1-39 and watches it fly t
 
 **Phase 4: realism and reach**
 
-- [ ] Golden-flight validation for Saturn V, Falcon 9 and Shuttle with a scorecard
-- [ ] More presets: Falcon Heavy, SLS, Starship
-- [ ] Free-design parts with plausibility warnings
-- [ ] True 2D Earth–Moon trajectory
-- [ ] Install on the Fire tablet home screen as an app
+- [x] Golden-flight validation for Saturn V, Falcon 9 and Shuttle with a scorecard
+- [x] More presets: Falcon Heavy, SLS, Starship
+- [x] Free-design parts with plausibility warnings
+- [x] True 2D Earth–Moon trajectory
+- [x] Install on the Fire tablet home screen as an app
 
 ## Appendix: kickoff prompt for Claude Code
 

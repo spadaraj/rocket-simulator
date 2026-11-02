@@ -27,6 +27,9 @@ const LIFT_TO_DRAG = 0.3;
 const BANK_GAIN_MS = 100;
 const MAINS_ALT_M = 3000;
 const MAINS_INFLATE_S = 6;
+/** Small drogue chutes steady the capsule and slow it before the mains open (Apollo: 7.3 km). */
+const DROGUE_ALT_M = 7300;
+const DROGUE_SHARE = 0.02;
 
 export type ReentryPhase = 'entry' | 'parachute' | 'splashdown' | 'lost';
 
@@ -86,6 +89,7 @@ export function simulateReentry(spec: RocketSpec, catalog: Catalog, fromMoon: bo
   let peakG = 0;
   let dipped = false;
   let chuteT = -1;
+  let drogueT = -1;
   let outcome: ReentryOutcome | null = null;
   let splash = 0;
   const samples: ReentrySample[] = [];
@@ -98,10 +102,12 @@ export function simulateReentry(spec: RocketSpec, catalog: Catalog, fromMoon: bo
     const v = Math.hypot(x[2], x[3]);
     const vr = (x[0] * x[2] + x[1] * x[3]) / r;
     const qS = 0.5 * a.densityKgM3 * v * v;
-    const area = chuteT >= 0 ? CAPSULE_CD * areaM2 + chuteArea * Math.min(1, (t - chuteT) / MAINS_INFLATE_S) : CAPSULE_CD * areaM2;
+    const drogue = drogueT >= 0 && chuteT < 0 ? chuteArea * DROGUE_SHARE * Math.min(1, (t - drogueT) / 2) : 0;
+    const mains = chuteT >= 0 ? chuteArea * Math.min(1, ((t - chuteT) / MAINS_INFLATE_S) ** 2) : 0;
+    const area = CAPSULE_CD * areaM2 + drogue + mains;
     const drag = qS * area;
     // Lift sits at right angles to the flight path, on the "up" side; roll it to cancel climbing.
-    const cosBank = chuteT >= 0 ? 0 : Math.max(-1, Math.min(1, -vr / BANK_GAIN_MS));
+    const cosBank = drogueT >= 0 ? 0 : Math.max(-1, Math.min(1, -vr / BANK_GAIN_MS));
     const lift = drag * LIFT_TO_DRAG * cosBank;
     const ux = v > 0 ? x[2] / v : 0;
     const uy = v > 0 ? x[3] / v : 0;
@@ -147,6 +153,7 @@ export function simulateReentry(spec: RocketSpec, catalog: Catalog, fromMoon: bo
     peakFlux = Math.max(peakFlux, flux);
     peakG = Math.max(peakG, gLoad);
     if (f.alt < 100e3) dipped = true;
+    if (drogueT < 0 && chuteArea > 0 && f.alt < DROGUE_ALT_M && f.vr < 0) drogueT = t;
     if (chuteT < 0 && f.alt < MAINS_ALT_M && f.vr < 0) chuteT = t;
 
     const dt = f.alt < 100e3 ? 0.05 : 0.5;
@@ -154,7 +161,7 @@ export function simulateReentry(spec: RocketSpec, catalog: Catalog, fromMoon: bo
     s = rk4Step(s as [number, number, number, number, number], dt, deriv);
     heatLoad += flux * dt;
     t += dt;
-    const phase: ReentryPhase = chuteT >= 0 ? 'parachute' : 'entry';
+    const phase: ReentryPhase = drogueT >= 0 ? 'parachute' : 'entry';
     if (t - lastSample >= (f.alt < 100e3 ? 0.5 : 2) - 1e-9) push(phase, flux, gLoad);
 
     if (dipped && Math.hypot(s[0], s[1]) - R_EARTH_M > ENTRY_INTERFACE_ALT_M + 5e3) {

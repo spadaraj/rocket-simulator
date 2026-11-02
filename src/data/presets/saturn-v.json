@@ -45,7 +45,7 @@
   "mission": {
     "target": "moon",
     "targetOrbitAltitudeM": 185000,
-    "pitchKick": { "timeS": 16, "angleDeg": 1 }
+    "pitchKick": { "timeS": 16, "angleDeg": 0.85 }
   },
   "notes": [
     "Apollo 11 reference: max-Q at T+83 s (~35 kPa, 13.5 km); S-IC cutoff at T+162 s; orbit insertion at T+710 s into a ~185 km parking orbit.",

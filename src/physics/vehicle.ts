@@ -109,6 +109,14 @@ export interface FinSet {
   bottomM: number;
 }
 
+/** A payload riding beside the stack (the Shuttle orbiter), drawn next to the bottom stage. */
+export interface SidePayload {
+  name: string;
+  lengthM: number;
+  diameterM: number;
+  color: string;
+}
+
 export interface Vehicle {
   name: string;
   stages: StageModel[];
@@ -122,6 +130,7 @@ export interface Vehicle {
   maxDiameterM: number;
   massPoints: MassPoint[];
   tankSpans: TankSpan[];
+  sidePayload?: SidePayload;
 }
 
 /** The shared catalog plus this rocket's own free-design parts. */
@@ -283,7 +292,7 @@ export function buildVehicle(spec: RocketSpec, baseCatalog: Catalog): Vehicle {
     let boosters: BoosterGroup | undefined;
     if (s.boosters) {
       const b = lookup(catalog, s.boosters.part);
-      if (b.type !== 'solidBooster') throw new Error(`"${b.id}" is not a solid booster`);
+      if (b.type !== 'solidBooster') throw new Error(`"${b.id}" is not a strap-on booster`);
       boosters = makeBoosterGroup(b, s.boosters.count, s.boosters.recovery === 'parachute');
       if (b.maxDynamicPressurePa) maxQ = Math.min(maxQ, b.maxDynamicPressurePa);
     }
@@ -315,6 +324,7 @@ export function buildVehicle(spec: RocketSpec, baseCatalog: Catalog): Vehicle {
   let payloadMassKg = 0;
   let payloadMaxQ = DEFAULT_MAX_Q_PA;
   const jettisonables: Vehicle['jettisonables'] = [];
+  let sidePayload: SidePayload | undefined;
   for (const ref of spec.payload.parts) {
     const part = lookup(catalog, ref.part);
     const count = ref.count ?? 1;
@@ -328,6 +338,11 @@ export function buildVehicle(spec: RocketSpec, baseCatalog: Catalog): Vehicle {
       jettisonables.push({ name: part.name, massKg, afterFirstStagingS: jettison });
     } else {
       payloadMassKg += massKg;
+    }
+    if (part.type === 'payload' && part.sideMount) {
+      sidePayload = { name: part.name, lengthM: part.lengthM ?? 30, diameterM: part.diameterM ?? 5, color: ref.color ?? '#f4f6fa' };
+      massPoints.push({ stageIndex: -1, xM: (part.lengthM ?? 30) * 0.45, massKg });
+      continue;
     }
     // Parts that are not drawn (the lander) ride inside the segment below them.
     const lastSeg = segments[segments.length - 1];
@@ -356,6 +371,7 @@ export function buildVehicle(spec: RocketSpec, baseCatalog: Catalog): Vehicle {
     maxDiameterM,
     massPoints,
     tankSpans,
+    sidePayload,
   };
 }
 
@@ -370,5 +386,6 @@ export function frontalAreaM2(vehicle: Vehicle, stageIndex: number, boostersAtta
     const bd = b.booster.diameterM ?? 3.7;
     area += (b.count * Math.PI * bd * bd) / 4;
   }
+  if (vehicle.sidePayload) area += (Math.PI * vehicle.sidePayload.diameterM ** 2) / 4;
   return area;
 }

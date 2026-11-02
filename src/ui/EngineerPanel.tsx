@@ -2,10 +2,12 @@
 // re-entry, flight settings and the event log.
 
 import { LEO_BUDGET_MS, TLI_BUDGET_MS, type StageDeltaV } from '../physics/deltaV';
+import type { Scorecard } from '../physics/golden';
 import type { MissionRecord } from '../physics/mission';
 import { CREW_G_LIMIT, DEFAULT_ENTRY_ANGLE_DEG } from '../physics/reentry';
 import type { Fault, FlightRecord, MissionSpec, Sample } from '../physics/types';
 import type { Vehicle } from '../physics/vehicle';
+import { ScorecardTable } from './Scorecard';
 
 interface Props {
   record: FlightRecord;
@@ -18,6 +20,9 @@ interface Props {
   missionSpec: MissionSpec;
   setMission: (patch: Partial<MissionSpec>) => void;
   onSeek: (t: number) => void;
+  /** Comparison with a real flight of this rocket, if there is one. */
+  scorecard?: Scorecard;
+  modified: boolean;
 }
 
 function describeFault(f: Fault, vehicle: Vehicle): string {
@@ -81,7 +86,7 @@ export function EngineerPanel(p: Props) {
   const stage = vehicle.stages[s.stageIndex];
   const totalDv = p.deltaV.reduce((a, d) => a + d.deltaVMS, 0);
   const m = p.missionSpec;
-  const toMoon = m.target === 'moon';
+  const toMoon = m.target !== 'orbit';
   const entryAngle = m.reentryAngleDeg ?? DEFAULT_ENTRY_ANGLE_DEG[toMoon ? 'moon' : 'orbit'];
   const re = mission.reentry;
 
@@ -293,8 +298,23 @@ export function EngineerPanel(p: Props) {
         </section>
       )}
 
+      {p.scorecard && (
+        <section>
+          <h4>Real flight check</h4>
+          <ScorecardTable card={p.scorecard} modified={p.modified} />
+        </section>
+      )}
+
       <section>
         <h4>Flight settings</h4>
+        <label className="slider">
+          <span>Mission</span>
+          <select value={m.target} onChange={(e) => p.setMission({ target: e.target.value as MissionSpec['target'] })}>
+            <option value="orbit">Earth orbit</option>
+            <option value="moon">Moon landing</option>
+            <option value="moonFlyby">Moon flyby (free return)</option>
+          </select>
+        </label>
         <Slider
           label="Pitch kick time"
           value={m.pitchKick.timeS}

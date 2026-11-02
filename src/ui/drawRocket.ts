@@ -1,7 +1,7 @@
 // Draws the vehicle side-on from its segments, in Roscoe's colours.
 // Local frame: metres, origin at the base centre of the lowest attached stage, nose toward -y.
 
-import type { Vehicle } from '../physics/vehicle';
+import type { SidePayload, Vehicle } from '../physics/vehicle';
 
 export interface RocketVisibility {
   stageIndex: number;
@@ -44,6 +44,60 @@ function flamePath(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.fill();
 }
 
+/** The Shuttle orbiter seen side-on, belly against the tank, tail sticking out. Engines at its base. */
+function drawOrbiter(ctx: CanvasRenderingContext2D, sp: SidePayload, x: number, flame: number, flicker: number) {
+  const d = sp.diameterM;
+  const L = sp.lengthM;
+  const base = 2;
+  ctx.save();
+  ctx.translate(x, 0);
+  if (flame > 0) for (const ex of [-d * 0.28, 0, d * 0.28]) flamePath(ctx, ex, base + d * 0.25, d * 0.3, d * 7 * flame, flicker);
+  ctx.fillStyle = '#4a5568';
+  for (const ex of [-d * 0.28, 0, d * 0.28]) {
+    ctx.save();
+    ctx.translate(ex, -base);
+    trapezoid(ctx, -d * 0.3, 0, d * 0.32, d * 0.16);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+  // Tail fin, sticking out away from the tank.
+  ctx.fillStyle = sp.color;
+  ctx.beginPath();
+  ctx.moveTo(d / 2, -(base + 1));
+  ctx.lineTo(d / 2 + d * 1.3, -(base + 0.5));
+  ctx.lineTo(d / 2 + d * 1.3, -(base + d * 0.7));
+  ctx.lineTo(d / 2, -(base + d * 2.4));
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Fuselage and nose.
+  const noseL = d * 1.4;
+  ctx.beginPath();
+  ctx.moveTo(-d / 2, -base);
+  ctx.lineTo(d / 2, -base);
+  ctx.lineTo(d / 2, -(base + L - noseL));
+  ctx.quadraticCurveTo(d / 2, -(base + L), 0, -(base + L));
+  ctx.quadraticCurveTo(-d / 2, -(base + L - noseL * 0.3), -d / 2, -(base + L - noseL));
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Black heat tiles on the belly (the side against the tank) and the nose cap.
+  ctx.fillStyle = '#2b2f36';
+  ctx.beginPath();
+  ctx.moveTo(-d / 2, -base);
+  ctx.lineTo(-d * 0.25, -base);
+  ctx.lineTo(-d * 0.25, -(base + L - noseL));
+  ctx.quadraticCurveTo(-d * 0.3, -(base + L - noseL * 0.35), -d * 0.05, -(base + L - 0.6));
+  ctx.quadraticCurveTo(-d / 2, -(base + L - noseL * 0.3), -d / 2, -(base + L - noseL));
+  ctx.closePath();
+  ctx.fill();
+  // Cockpit windows.
+  ctx.fillStyle = '#1d3d73';
+  ctx.fillRect(d * 0.05, -(base + L - noseL * 0.75), d * 0.3, noseL * 0.25);
+  ctx.restore();
+}
+
 /** Draw at the current transform. `lineM` is the outline width in metres. */
 export function drawRocket(
   ctx: CanvasRenderingContext2D,
@@ -61,8 +115,12 @@ export function drawRocket(
   const bottom = v.stages[vis.stageIndex];
   const coreDiameter = bottom?.diameterM ?? 4;
 
+  const side = v.sidePayload;
+  const sideX = side && bottom ? coreDiameter / 2 + side.diameterM / 2 : 0;
+  const coreEngines = !side;
+
   // Flames under the bottom stage's engines.
-  if (vis.flame > 0 && bottom) {
+  if (vis.flame > 0 && bottom && coreEngines) {
     const n = Math.min(5, bottom.engines.reduce((c, g) => c + g.count, 0)) || 1;
     const bell = Math.min(coreDiameter / n, coreDiameter * 0.45);
     for (let i = 0; i < n; i++) {
@@ -72,7 +130,7 @@ export function drawRocket(
   }
 
   // Engine bells.
-  if (bottom && bottom.engines.length) {
+  if (bottom && bottom.engines.length && coreEngines) {
     const n = Math.min(5, bottom.engines.reduce((c, g) => c + g.count, 0));
     const bell = Math.min(coreDiameter / n, coreDiameter * 0.45);
     ctx.fillStyle = '#4a5568';
@@ -135,6 +193,8 @@ export function drawRocket(
       ctx.stroke();
     }
   }
+
+  if (side) drawOrbiter(ctx, side, sideX, bottom ? vis.flame : 0, flicker);
 
   // The stack itself.
   let y = 0;

@@ -145,11 +145,23 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
   /** Propellant the ascent may burn: the landing reserve stays in the tank. */
   const usable = (i: number) => Math.max(0, cfg.stagePropKg[i] - vehicle.stages[i].landingReserveKg);
 
-  function throttleFor(qPa: number): number {
-    const mq = mission.maxQThrottle;
-    if (!mq || qPa < mq.aboveQPa) return 1;
+  function throttleFor(qPa: number, st?: State, pressurePa = 0): number {
     const stage = vehicle.stages[cfg.stageIndex];
-    return Math.max(stage?.throttleMin ?? 1, Math.min(1, mq.throttle));
+    const floor = stage?.throttleMin ?? 1;
+    let throttle = 1;
+    const mq = mission.maxQThrottle;
+    if (mq && qPa >= mq.aboveQPa) throttle = Math.max(floor, Math.min(1, mq.throttle));
+    // Throttle back late in the burn so the push stays under the g limit (Shuttle: 3 g).
+    const maxG = mission.maxAccelG;
+    if (maxG && st) {
+      const full = propulsion(pressurePa, 1, cfg.boosterElapsedS).thrustN;
+      const liquid = full - propulsion(pressurePa, 0, cfg.boosterElapsedS).thrustN;
+      if (liquid > 0) {
+        const wanted = (maxG * G0_MS2 * st[4] - (full - liquid)) / liquid;
+        throttle = Math.min(throttle, Math.max(floor, wanted));
+      }
+    }
+    return throttle;
   }
 
   /** Liquid-stage mass flow (constant over a step for a given throttle). */
@@ -325,7 +337,7 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
     const a0 = atmo(alt0);
     const [vax0, vay0] = airVelocity(st);
     const q0 = 0.5 * a0.densityKgM3 * (vax0 * vax0 + vay0 * vay0);
-    const throttle = throttleFor(q0);
+    const throttle = throttleFor(q0, st, a0.pressurePa);
     const prop0 = propulsion(a0.pressurePa, throttle, cfg.boosterElapsedS);
     const u = attitude(st, prop0.thrustN);
     const area = frontalAreaM2(vehicle, cfg.stageIndex, cfg.boostersAttached);

@@ -1,8 +1,9 @@
 // The Moon leg as a delta-v ledger: each burn from Earth orbit to the Moon's surface and
-// back, paid for by the stage that does it. Not a trajectory (that is Phase 4).
+// back, paid for by the stage that does it. The push toward the Moon comes from the real
+// free-return flight path (trajectory.ts); the other burns use Apollo's budgets.
 
 import { G0_MS2 } from './constants';
-import { TLI_BUDGET_MS } from './deltaV';
+import { solveFreeReturn } from './trajectory';
 import { resolveCatalog } from './vehicle';
 import type { Catalog, Payload, RocketSpec } from './types';
 
@@ -11,8 +12,10 @@ export const LOI_BUDGET_MS = 900;
 export const DESCENT_BUDGET_MS = 2000;
 export const ASCENT_BUDGET_MS = 1850;
 export const TEI_BUDGET_MS = 1000;
+/** Free-return flyby: small course corrections only (Apollo 13 / Artemis II style). */
+export const FLYBY_BUDGET_MS = 50;
 
-export type LegId = 'tli' | 'loi' | 'descent' | 'ascent' | 'tei';
+export type LegId = 'tli' | 'loi' | 'descent' | 'ascent' | 'tei' | 'flyby';
 
 export interface Leg {
   id: LegId;
@@ -44,6 +47,9 @@ const rocketDv = (ispS: number, m0: number, propKg: number) =>
   propKg > 0 && m0 > propKg ? ispS * G0_MS2 * Math.log(m0 / (m0 - propKg)) : 0;
 const propFor = (ispS: number, m0: number, dvMS: number) => m0 * (1 - Math.exp(-dvMS / (ispS * G0_MS2)));
 
+/** Push needed to leave a parking orbit on a free return around the Moon. */
+export const tliNeededMS = (parkingAltM: number) => Math.ceil(solveFreeReturn(parkingAltM).burnMS);
+
 /** remainingDeltaVMS: what the top stage has left in Earth orbit (from the ascent). */
 export function moonLedger(spec: RocketSpec, catalog: Catalog, remainingDeltaVMS: number): MoonLedger {
   const parts = payloadParts(spec, catalog);
@@ -59,9 +65,18 @@ export function moonLedger(spec: RocketSpec, catalog: Catalog, remainingDeltaVMS
     legs.push({ ...leg, ok: leg.availableMS >= leg.neededMS });
   };
 
-  add({ id: 'tli', name: 'Trans-lunar injection', roscoe: 'Blast off toward the Moon', by: topStage, neededMS: TLI_BUDGET_MS, availableMS: remainingDeltaVMS });
+  const tliMS = tliNeededMS(spec.mission.targetOrbitAltitudeM);
+  add({ id: 'tli', name: 'Trans-lunar injection', roscoe: 'Blast off toward the Moon', by: topStage, neededMS: tliMS, availableMS: remainingDeltaVMS });
 
   const lmKg = lander?.massKg ?? 0;
+  if (spec.mission.target === 'moonFlyby') {
+    // Loop behind the Moon and fall straight back to Earth: gravity does the turning.
+    const m = otherKg + (service?.massKg ?? 0) + lmKg;
+    const prop = service?.propulsion?.propellantKg ?? 0;
+    add({ id: 'flyby', name: 'Free-return flyby', roscoe: 'Swing around the Moon and head home', by: service?.name ?? 'Nothing', neededMS: FLYBY_BUDGET_MS, availableMS: rocketDv(service?.propulsion?.ispS ?? 0, m, prop) });
+    const short = legs.find((l) => !l.ok);
+    return { legs, shortLeg: short?.id, success: !short };
+  }
   let smProp = service?.propulsion?.propellantKg ?? 0;
   const smIsp = service?.propulsion?.ispS ?? 0;
   const smKg = service?.massKg ?? 0;

@@ -1,0 +1,34 @@
+{
+  "id": "shuttle",
+  "name": "Space Shuttle",
+  "description": "The orbiter rides on the side of the big orange tank, with two solid boosters. Its three main engines burn the tank's fuel all the way to orbit.",
+  "launchSite": "KSC",
+  "stages": [
+    {
+      "name": "External tank",
+      "color": "#d7823b",
+      "parts": [
+        { "part": "rs-25-shuttle", "count": 3 },
+        { "part": "shuttle-et" }
+      ],
+      "boosters": { "part": "srb-shuttle", "count": 2, "separate": "onBurnout", "color": "#f4f6fa", "recovery": "parachute" }
+    }
+  ],
+  "payload": {
+    "name": "Orbiter",
+    "parts": [{ "part": "shuttle-orbiter", "color": "#f4f6fa" }]
+  },
+  "mission": {
+    "target": "orbit",
+    "targetOrbitAltitudeM": 200000,
+    "maxAccelG": 3,
+    "pitchKick": { "timeS": 6, "angleDeg": 3.5 },
+    "maxQThrottle": { "aboveQPa": 33000, "throttle": 0.67 }
+  },
+  "notes": [
+    "The orbiter throttled its engines back near the end to keep the crew under 3 g; the sim does the same.",
+    "Reference flight: STS-30 (NASA trajectory data): max-Q at T+59 s; booster separation at T+125 s, 46.8 km, 1,284 m/s; main engine cutoff at T+511 s, 110 km.",
+    "The main engines are part of the orbiter, but they burn the tank's fuel, so the sim counts them with the tank. Their weight is the same either way on the way up.",
+    "The real Shuttle reaches orbit with a small burn of its own after dropping the tank; the sim stops at tank separation."
+  ]
+}

@@ -81,7 +81,7 @@ export function flyMission(spec: RocketSpec, catalog: Catalog, opts: SimOptions 
   let moon: MoonLedger | undefined;
   let reentry: ReentryRecord | undefined;
   if (o.success) {
-    const toMoon = spec.mission.target === 'moon';
+    const toMoon = spec.mission.target !== 'orbit';
     if (toMoon) {
       moon = moonLedger(spec, catalog, o.remainingDeltaVMS);
       const short = moon.legs.find((l) => !l.ok);
@@ -89,7 +89,11 @@ export function flyMission(spec: RocketSpec, catalog: Catalog, opts: SimOptions 
         id: 'moon',
         label: 'Moon trip',
         status: short ? 'fail' : 'ok',
-        note: short ? `${short.name}: needs ${short.neededMS.toFixed(0)} m/s, has ${short.availableMS.toFixed(0)}` : 'Landed on the Moon and came back',
+        note: short
+          ? `${short.name}: needs ${short.neededMS.toFixed(0)} m/s, has ${short.availableMS.toFixed(0)}`
+          : spec.mission.target === 'moonFlyby'
+            ? 'Looped around the Moon and came back'
+            : 'Landed on the Moon and came back',
       });
       if (short && !failure)
         failure = { type: 'moonShort', detail: { leg: short.name, by: short.by, neededMS: short.neededMS, availableMS: short.availableMS } };

@@ -1,0 +1,44 @@
+{
+  "id": "sls",
+  "name": "SLS (Artemis II)",
+  "description": "NASA's Moon rocket: four Shuttle engines on an orange core, two five-segment boosters, and Orion with four astronauts looping around the Moon.",
+  "launchSite": "KSC",
+  "stages": [
+    {
+      "name": "Core stage",
+      "color": "#d7823b",
+      "parts": [
+        { "part": "rs-25", "count": 4 },
+        { "part": "sls-core-tank" },
+        { "part": "sls-lvsa", "color": "#f4f6fa" }
+      ],
+      "boosters": { "part": "srb-sls-5seg", "count": 2, "separate": "onBurnout", "color": "#f4f6fa", "recovery": "none" }
+    },
+    {
+      "name": "ICPS",
+      "color": "#f4f6fa",
+      "parts": [
+        { "part": "rl10b-2", "count": 1 },
+        { "part": "icps-tank" },
+        { "part": "orion-stage-adapter" }
+      ]
+    }
+  ],
+  "payload": {
+    "name": "Orion",
+    "parts": [
+      { "part": "orion-esm", "color": "#dfe5ee" },
+      { "part": "orion-cm", "color": "#c9d1dc" },
+      { "part": "orion-las", "color": "#f4f6fa" }
+    ]
+  },
+  "mission": {
+    "target": "moonFlyby",
+    "targetOrbitAltitudeM": 185000,
+    "pitchKick": { "timeS": 10, "angleDeg": 1.5 }
+  },
+  "notes": [
+    "Artemis II flies around the Moon and straight home without landing, so there is no lander.",
+    "The real SLS boosters are thrown away; the boosters here do the same."
+  ]
+}

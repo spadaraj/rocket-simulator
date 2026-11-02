@@ -24,6 +24,8 @@ import {
 } from '../physics/edit';
 import type { Part, RocketSpec } from '../physics/types';
 import type { Vehicle } from '../physics/vehicle';
+import { resolveCatalog } from '../physics/vehicle';
+import { EngineDesigner } from './EngineDesigner';
 import { RocketThumb } from './RocketThumb';
 
 interface Props {
@@ -39,7 +41,6 @@ interface Props {
   onReset: () => void;
 }
 
-const ENGINES = liquidEngines(catalog);
 const fmt = (x: number, d = 0) => x.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 
 function Num(props: { value: number; step: number; min: number; max: number; onChange: (v: number) => void; label: string }) {
@@ -95,13 +96,14 @@ export function EngineerBuilder(p: Props) {
   };
 
   const b = spec.stages[0]?.boosters;
+  const engines = liquidEngines(resolveCatalog(spec, catalog));
 
   return (
     <div className="engineer-builder">
       <div className="eb-main">
         <div className="eb-toolbar">
           <button className="btn small" onClick={p.onAutoSize} disabled={p.autoSizing}>
-            {p.autoSizing ? 'Sizing…' : 'Auto-size for the Moon'}
+            {p.autoSizing ? 'Sizing…' : spec.mission.target === 'orbit' ? 'Auto-size for orbit' : 'Auto-size for the Moon'}
           </button>
           <button className="btn small" onClick={() => setSpec(addStage(spec, catalog))} disabled={spec.stages.length >= 4}>
             Add stage
@@ -143,7 +145,7 @@ export function EngineerBuilder(p: Props) {
                   <td>
                     {eng && (
                       <select value={eng.part.id} onChange={(e) => setSpec(setEngine(spec, catalog, i, e.target.value))}>
-                        {ENGINES.map((e) => (
+                        {engines.map((e) => (
                           <option key={e.id} value={e.id}>
                             {e.name}
                           </option>
@@ -243,6 +245,9 @@ export function EngineerBuilder(p: Props) {
             </tr>
           </tbody>
         </table>
+
+        <h4 className="eb-h">Design an engine</h4>
+        <EngineDesigner spec={spec} setSpec={setSpec} />
 
         <h4 className="eb-h">Parts catalog</h4>
         <input className="eb-search" placeholder="Search parts (e.g. raptor, booster, tank)" value={query} onChange={(e) => setQuery(e.target.value)} />

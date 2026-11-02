@@ -13,8 +13,8 @@ export interface StageDeltaV {
 
 /** Approximate textbook budget to low Earth orbit, including gravity and drag losses. */
 export const LEO_BUDGET_MS = 9400;
-/** Extra to leave Earth orbit for the Moon (trans-lunar injection). */
-export const TLI_BUDGET_MS = 3100;
+/** Extra to leave Earth orbit for the Moon (trans-lunar injection): a free return from about 185 km. */
+export const TLI_BUDGET_MS = 3170;
 
 export function stageDeltaV(spec: RocketSpec, catalog: Catalog): StageDeltaV[] {
   const v = buildVehicle(spec, catalog);

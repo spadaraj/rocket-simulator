@@ -1,0 +1,43 @@
+{
+  "id": "falcon-9",
+  "name": "Falcon 9",
+  "description": "SpaceX's workhorse, set up for an ISS cargo run: nine Merlins, one Merlin Vacuum and a Cargo Dragon. The booster lands on a drone ship.",
+  "launchSite": "KSC",
+  "stages": [
+    {
+      "name": "First stage",
+      "color": "#f4f6fa",
+      "parts": [
+        { "part": "merlin-1d", "count": 9 },
+        { "part": "f9-s1-tank" },
+        { "part": "f9-interstage", "color": "#2b2f36" },
+        { "part": "f9-landing-leg", "count": 4 }
+      ],
+      "recovery": "propulsive",
+      "landingReserveKg": 55000
+    },
+    {
+      "name": "Second stage",
+      "color": "#f4f6fa",
+      "parts": [
+        { "part": "merlin-vacuum", "count": 1 },
+        { "part": "f9-s2-tank" }
+      ]
+    }
+  ],
+  "payload": {
+    "name": "Cargo Dragon",
+    "parts": [{ "part": "dragon-cargo", "color": "#e8eef7" }]
+  },
+  "mission": {
+    "target": "orbit",
+    "targetOrbitAltitudeM": 210000,
+    "maxQThrottle": { "aboveQPa": 33000, "throttle": 0.6 },
+    "pitchKick": { "timeS": 10, "angleDeg": 0.75 }
+  },
+  "notes": [
+    "Reference flight: an ISS cargo run (CRS-7 and CRS-19 timelines): max-Q about T+78 s; first-stage cutoff about T+150 s near 80 km.",
+    "Scorecard: the first stage burns out about 13% early, probably because the real one throttles down more around max-Q than the sim's simple rule does.",
+    "The real booster lands on a drone ship or flies back to the launch site; the sim lands it wherever it falls."
+  ]
+}

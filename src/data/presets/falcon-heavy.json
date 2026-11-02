@@ -1,0 +1,46 @@
+{
+  "id": "falcon-heavy",
+  "name": "Falcon Heavy",
+  "description": "Three Falcon 9 cores side by side: 27 Merlins at liftoff, carrying a 20 t satellite to low orbit.",
+  "launchSite": "KSC",
+  "stages": [
+    {
+      "name": "Centre core",
+      "color": "#f4f6fa",
+      "parts": [
+        { "part": "merlin-1d", "count": 9 },
+        { "part": "fh-core-tank" },
+        { "part": "f9-interstage", "color": "#2b2f36" }
+      ],
+      "boosters": { "part": "falcon-side-booster", "count": 2, "separate": "onBurnout", "color": "#f4f6fa", "recovery": "none" },
+      "recovery": "none"
+    },
+    {
+      "name": "Second stage",
+      "color": "#f4f6fa",
+      "parts": [
+        { "part": "merlin-vacuum", "count": 1 },
+        { "part": "f9-s2-tank" }
+      ]
+    }
+  ],
+  "payload": {
+    "name": "Satellite in fairing",
+    "parts": [
+      { "part": "satellite-heavy" },
+      { "part": "fairing-5m", "color": "#f4f6fa" }
+    ]
+  },
+  "mission": {
+    "target": "orbit",
+    "targetOrbitAltitudeM": 250000,
+    "maxAccelG": 4.5,
+    "maxQThrottle": { "aboveQPa": 28000, "throttle": 0.7 },
+    "pitchKick": { "timeS": 10, "angleDeg": 1.5 }
+  },
+  "notes": [
+    "The centre core throttles back to try to stay under 4.5 g (an estimate; SpaceX doesn't publish it). The side boosters can't throttle in the sim, so it still peaks near 7 g just before they drop off.",
+    "The side boosters burn liquid fuel but are modelled as strap-ons at full thrust until empty. The real ones fly back and land at the Cape.",
+    "The real centre core throttles down early to save fuel for after the side boosters leave; the sim runs it at full thrust."
+  ]
+}

@@ -5,7 +5,7 @@
 export type Confidence = 'published' | 'estimate';
 export type Propellant = 'CH4/LOX' | 'RP-1/LOX' | 'LH2/LOX' | 'solid';
 /** How a part is drawn: a cylinder, a cone/taper between two diameters, a capsule, or a tower. */
-export type Shape = 'cylinder' | 'frustum' | 'capsule' | 'tower' | 'lander';
+export type Shape = 'cylinder' | 'frustum' | 'capsule' | 'tower' | 'lander' | 'orbiter';
 
 interface PartBase {
   id: string;
@@ -37,6 +37,8 @@ export interface LiquidEngine extends PartBase {
   vacuumOnly?: boolean;
   /** How far the engine can swivel to steer (default 5°). */
   gimbalDeg?: number;
+  /** Free-design engines: the catalog engine this one started from. */
+  basedOn?: string;
 }
 
 export interface SolidBooster extends PartBase {
@@ -50,6 +52,8 @@ export interface SolidBooster extends PartBase {
   thrustCurve: [number, number][];
   /** Nozzle steering range (default 5°). */
   gimbalDeg?: number;
+  /** Set for a liquid-fuelled strap-on run at full thrust until empty (Falcon Heavy side boosters). */
+  propellant?: Exclude<Propellant, 'solid'>;
 }
 
 export interface Tank extends PartBase {
@@ -75,6 +79,8 @@ export interface Payload extends PartBase {
   heatShield?: { massKg: number; maxHeatFluxWm2: number; maxHeatLoadJm2: number };
   /** Splashdown parachutes: total drag area (Cd × area) of the mains. */
   parachuteDragAreaM2?: number;
+  /** Rides on the side of the stack instead of on top (the Shuttle orbiter). */
+  sideMount?: boolean;
 }
 
 export interface AeroPart extends PartBase {
@@ -122,11 +128,14 @@ export interface StageSpec {
 }
 
 export interface MissionSpec {
-  target: 'orbit' | 'moon';
+  /** moonFlyby: loop around the Moon and come straight home, no landing (Artemis II). */
+  target: 'orbit' | 'moon' | 'moonFlyby';
   targetOrbitAltitudeM: number;
   pitchKick: { timeS: number; angleDeg: number };
   /** Throttle liquid engines down while dynamic pressure is above a threshold. */
   maxQThrottle?: { aboveQPa: number; throttle: number };
+  /** Throttle liquid engines down to keep the push under this many g. */
+  maxAccelG?: number;
   /** Flight-path angle at the top of the atmosphere coming home (negative = downward). */
   reentryAngleDeg?: number;
 }

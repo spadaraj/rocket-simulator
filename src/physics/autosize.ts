@@ -3,7 +3,7 @@
 // so gravity and drag losses are counted, not just the rocket equation.
 // If a stage is set to land, first find how much fuel it must hold back to land.
 
-import { TLI_BUDGET_MS } from './deltaV';
+import { tliNeededMS } from './moon';
 import { setFill, setRecovery, stageFill } from './edit';
 import { flyMission } from './mission';
 import type { Catalog, FailureType, RocketSpec } from './types';
@@ -39,6 +39,11 @@ export function autoSize(input: RocketSpec, catalog: Catalog): AutoSizeResult {
   let spec = input;
   const n = spec.stages.length;
   const landIdx = spec.stages.findIndex((s) => s.recovery === 'propulsive');
+  // Orbit-only flights just need to get there; Moon flights need the push toward the Moon left over.
+  const toMoon = spec.mission.target !== 'orbit';
+  const tliMS = toMoon ? tliNeededMS(spec.mission.targetOrbitAltitudeM) : 0;
+  const needDv = tliMS * (1 + MARGIN);
+  const goal = toMoon ? 'the Moon' : 'orbit';
   const withFills = (fills: number[]) => fills.reduce((s, f, i) => setFill(s, catalog, i, f), spec);
   const landed = (m: ReturnType<typeof flyMission>) =>
     landIdx < 0 || m.recoveries.some((r) => r.kind === 'stage' && r.stageIndex === landIdx && r.outcome === 'landed');
@@ -46,7 +51,7 @@ export function autoSize(input: RocketSpec, catalog: Catalog): AutoSizeResult {
     flights++;
     const m = flyMission(s, catalog, { dtS });
     const o = m.ascent.outcome;
-    return { ok: o.success && o.remainingDeltaVMS >= TLI_BUDGET_MS * (1 + MARGIN) && landed(m), r: m.ascent, m };
+    return { ok: o.success && o.remainingDeltaVMS >= needDv && landed(m), r: m.ascent, m };
   };
 
   // Landing first: the least fuel that still brings the stage down softly with full tanks.
@@ -90,14 +95,14 @@ export function autoSize(input: RocketSpec, catalog: Catalog): AutoSizeResult {
     const o = full.r.outcome;
     const landingCost = landIdx >= 0 && o.success;
     const why = o.success
-      ? `full tanks reach orbit with ${o.remainingDeltaVMS.toFixed(0)} m/s left, but the Moon needs about ${TLI_BUDGET_MS} m/s`
+      ? `full tanks reach orbit with ${o.remainingDeltaVMS.toFixed(0)} m/s left, but the Moon needs about ${tliMS} m/s`
       : `even with full tanks ${FAILURE_WORDS[o.failure!.type]}`;
     return {
       ok: false,
       spec,
-      message: landingCost
-        ? `${landingNote}That leaves ${o.remainingDeltaVMS.toFixed(0)} m/s for the Moon, which needs about ${TLI_BUDGET_MS}. Make the top stage bigger, or don't land.`
-        : `${landingNote}Can't reach the Moon yet: ${why}. Try bigger tanks, more engines or another stage.`,
+      message: landingCost && toMoon
+        ? `${landingNote}That leaves ${o.remainingDeltaVMS.toFixed(0)} m/s for the Moon, which needs about ${tliMS}. Make the top stage bigger, or don't land.`
+        : `${landingNote}Can't reach ${goal} yet: ${why}. Try bigger tanks, more engines or another stage.`,
       flightsTried: flights,
     };
   }
@@ -129,8 +134,8 @@ export function autoSize(input: RocketSpec, catalog: Catalog): AutoSizeResult {
     const candidate = withFills(fills.map((f) => Math.min(1, f + bump)));
     if (reaches(candidate, 0.05).ok) {
       const pct = candidate.stages.map((_, i) => `${Math.round(stageFill(candidate, catalog, i) * 100)}%`).join(' / ');
-      return { ok: true, spec: candidate, message: `${landingNote}Sized for the Moon: tanks ${pct} full.`, flightsTried: flights };
+      return { ok: true, spec: candidate, message: `${landingNote}Sized for ${goal}: tanks ${pct} full.`, flightsTried: flights };
     }
   }
-  return { ok: true, spec: withFills(Array(n).fill(1)), message: 'Full tanks are just enough for the Moon.', flightsTried: flights };
+  return { ok: true, spec: withFills(Array(n).fill(1)), message: `Full tanks are just enough for ${goal}.`, flightsTried: flights };
 }

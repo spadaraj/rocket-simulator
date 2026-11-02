@@ -1,7 +1,12 @@
 import type { Catalog, Part, RocketSpec } from '../physics/types';
 import partsJson from './parts.json';
 import a139 from './presets/a1-39.json';
+import falcon9 from './presets/falcon-9.json';
+import falconHeavy from './presets/falcon-heavy.json';
 import saturnV from './presets/saturn-v.json';
+import shuttle from './presets/shuttle.json';
+import sls from './presets/sls.json';
+import starship from './presets/starship.json';
 
 export const catalog: Catalog = Object.fromEntries(
   (partsJson as unknown as Part[]).map((p) => [p.id, p]),
@@ -22,4 +27,8 @@ const a139AsDrawn: RocketSpec = {
   ),
 };
 
-export const presets: RocketSpec[] = [a139Spec, a139AsDrawn, saturnV as unknown as RocketSpec];
+export const presets: RocketSpec[] = [
+  a139Spec,
+  a139AsDrawn,
+  ...[saturnV, falcon9, falconHeavy, shuttle, sls, starship].map((p) => p as unknown as RocketSpec),
+];

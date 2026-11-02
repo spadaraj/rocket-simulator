@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { catalog, presets } from './data/catalog';
 import { stageDeltaV } from './physics/deltaV';
 import { setMission } from './physics/edit';
+import { goldenFor, scorecard } from './physics/golden';
 import { rollFaults } from './physics/faults';
 import type { FixResult } from './physics/fixes';
 import { flyMission } from './physics/mission';
@@ -21,6 +22,7 @@ import { EngineerResult, RoscoeResult, type FixState } from './ui/ResultCard';
 import { RocketThumb } from './ui/RocketThumb';
 import { RoscoeBuilder } from './ui/RoscoeBuilder';
 import { RoscoeDials } from './ui/RoscoeDials';
+import { ScorecardBadge } from './ui/Scorecard';
 import { StageStrip } from './ui/StageStrip';
 import { autoSizeAsync, findFixesAsync } from './ui/whatIf';
 
@@ -54,9 +56,36 @@ function loadChaos(): boolean {
 
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
+/** Chrome-family browsers (including Silk) offer to install the app with this event. */
+interface InstallPrompt extends Event {
+  prompt: () => Promise<void>;
+}
+
+function useInstallPrompt() {
+  const [prompt, setPrompt] = useState<InstallPrompt | null>(null);
+  useEffect(() => {
+    const offer = (e: Event) => {
+      e.preventDefault();
+      setPrompt(e as InstallPrompt);
+    };
+    const installed = () => setPrompt(null);
+    window.addEventListener('beforeinstallprompt', offer);
+    window.addEventListener('appinstalled', installed);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', offer);
+      window.removeEventListener('appinstalled', installed);
+    };
+  }, []);
+  if (!prompt) return null;
+  return () => {
+    prompt.prompt().finally(() => setPrompt(null));
+  };
+}
+
 export default function App() {
   const [mode, setModeState] = useState<Mode>(loadMode);
   const [presetId, setPresetId] = useState(presets[0].id);
+  const [picking, setPicking] = useState(false);
   const preset = presets.find((p) => p.id === presetId)!;
   const [spec, setSpec] = useState<RocketSpec>(preset);
   const [tab, setTab] = useState<Tab>('fly');
@@ -69,6 +98,7 @@ export default function App() {
   const [autoMessage, setAutoMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState<Run[]>([]);
   const runId = useRef(1);
+  const install = useInstallPrompt();
   const roscoe = mode === 'roscoe';
   const modified = spec !== preset;
 
@@ -99,6 +129,10 @@ export default function App() {
   const deltaV = useMemo(() => stageDeltaV(spec, catalog), [spec]);
   const thumbs = useMemo(() => Object.fromEntries(presets.map((p) => [p.id, buildVehicle(p, catalog)])), []);
   const feedback = useMemo(() => missionFeedback(mission), [mission]);
+  const realFlight = useMemo(() => {
+    const g = goldenFor(presetId);
+    return g ? scorecard(g, record) : undefined;
+  }, [presetId, record]);
   const pb = usePlayback(mission, mission.flightDurationS, 10);
   const sample = sampleAt(record.samples, pb.t);
   const current: Run = useMemo(
@@ -228,20 +262,35 @@ export default function App() {
           <span className="brand-name">Rocket Simulator</span>
         </div>
         <nav className="picker" aria-label="Choose a rocket">
-          {presets.map((p) => (
-            <button
-              key={p.id}
-              className={`pick ${p.id === presetId ? 'on' : ''}`}
-              onClick={() => choosePreset(p.id)}
-              title={p.description}
-            >
-              <RocketThumb vehicle={p.id === presetId ? vehicle : thumbs[p.id]} height={roscoe ? 60 : 40} />
-              <span>
-                {p.name}
-                {p.id === presetId && modified && <em className="modified"> (modified)</em>}
-              </span>
-            </button>
-          ))}
+          <button className="pick on" onClick={() => setPicking(!picking)} aria-expanded={picking} title="Choose a rocket">
+            <RocketThumb vehicle={vehicle} height={roscoe ? 60 : 40} />
+            <span>
+              {spec.name}
+              {modified && <em className="modified"> (modified)</em>}
+            </span>
+            <span aria-hidden="true">▾</span>
+          </button>
+          {picking && (
+            <>
+              <div className="picker-backdrop" onClick={() => setPicking(false)} />
+              <div className="picker-menu">
+                {presets.map((p) => (
+                  <button
+                    key={p.id}
+                    className={`pick-card ${p.id === presetId ? 'on' : ''}`}
+                    onClick={() => {
+                      choosePreset(p.id);
+                      setPicking(false);
+                    }}
+                  >
+                    <RocketThumb vehicle={thumbs[p.id]} height={110} />
+                    <b>{p.name}</b>
+                    {!roscoe && <span className="muted">{p.description}</span>}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </nav>
         <div className="tabs" role="tablist" aria-label="Screen">
           {tabs.map((t) => (
@@ -250,6 +299,11 @@ export default function App() {
             </button>
           ))}
         </div>
+        {install && (
+          <button className="chaos-toggle" onClick={install} title="Put the simulator on the home screen as an app">
+            📲 Install
+          </button>
+        )}
         <button
           className={`chaos-toggle ${chaos ? 'on' : ''}`}
           onClick={() => setChaos(!chaos)}
@@ -333,7 +387,14 @@ export default function App() {
               </>
             )}
             {scene === 'moon' && mission.moon && (
-              <MoonLeg ledger={mission.moon} roscoe={roscoe} legSeconds={roscoe ? 3.4 : 2.2} onDone={phase === 'moon' ? afterMoon : () => {}} />
+              <MoonLeg
+                ledger={mission.moon}
+                parkingAltM={spec.mission.targetOrbitAltitudeM}
+                kind={spec.mission.target === 'moonFlyby' ? 'flyby' : 'land'}
+                roscoe={roscoe}
+                sceneSeconds={roscoe ? 18 : 12}
+                onDone={phase === 'moon' ? afterMoon : () => {}}
+              />
             )}
             {scene === 'reentry' && mission.reentry && (
               <ReentryView record={mission.reentry} roscoe={roscoe} sceneSeconds={roscoe ? 24 : 14} onDone={phase === 'reentry' ? () => finish('reentry') : () => {}} />
@@ -356,7 +417,15 @@ export default function App() {
             {phase === 'countdown' && <Countdown from={10} onDone={startFlight} voice={roscoe} />}
 
             {phase === 'done' && roscoe && (
-              <RoscoeResult fb={feedback} fix={fix} steps={mission.result.steps} replays={replays} onAgain={again} onTryFix={tryFix} />
+              <RoscoeResult
+                fb={feedback}
+                fix={fix}
+                steps={mission.result.steps}
+                replays={replays}
+                onAgain={again}
+                onTryFix={tryFix}
+                badge={realFlight && <ScorecardBadge card={realFlight} modified={modified} />}
+              />
             )}
 
             {scene === 'flight' && (phase === 'flying' || phase === 'done') && (
@@ -412,6 +481,8 @@ export default function App() {
                 deltaV={deltaV}
                 missionSpec={spec.mission}
                 setMission={(patch) => setSpec(setMission(spec, patch))}
+                scorecard={realFlight}
+                modified={modified}
                 onSeek={(t) => {
                   if (phase === 'ready' || phase === 'countdown' || phase === 'done') setPhase('flying');
                   pb.seek(t);

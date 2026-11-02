@@ -1,91 +1,177 @@
-// The Moon trip as a picture: Earth, Moon and the spacecraft moving through each burn,
-// with the delta-v ledger filling in beside it. A schematic, not a real trajectory.
+// The Moon trip: the real free-return flight path, seen with the Earth and Moon held still,
+// and the delta-v ledger filling in beside it as each burn happens.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { R_EARTH_M } from '../physics/constants';
 import type { LegId, MoonLedger } from '../physics/moon';
+import { EARTH_X_M, MOON_X_M, moonTrajectory, R_MOON_M, type TripKind } from '../physics/trajectory';
 
 interface Props {
   ledger: MoonLedger;
+  parkingAltM: number;
+  kind: TripKind;
   roscoe: boolean;
-  /** Seconds per leg at normal speed. */
-  legSeconds?: number;
+  /** Real seconds for the whole scene. */
+  sceneSeconds?: number;
   onDone: () => void;
 }
 
-const E = { x: 170, y: 300, r: 70 };
-const M = { x: 820, y: 250, r: 38 };
-const ORBIT_R = 64;
+const E = { x: 150, y: 320, r: 30 };
+const M = { x: 840, y: 320, r: 17 };
+const SCALE = (M.x - E.x) / (MOON_X_M - EARTH_X_M);
+/** Near each body the path is pushed outwards so it clears the (enlarged) drawing of it. */
+const FISHEYE_M = 30000e3;
 
 type Pt = [number, number];
-const bez = (a: Pt, c: Pt, b: Pt, f: number): Pt => [
-  (1 - f) * (1 - f) * a[0] + 2 * (1 - f) * f * c[0] + f * f * b[0],
-  (1 - f) * (1 - f) * a[1] + 2 * (1 - f) * f * c[1] + f * f * b[1],
-];
-const onCircle = (cx: number, cy: number, r: number, deg: number): Pt => [cx + r * Math.cos((deg * Math.PI) / 180), cy + r * Math.sin((deg * Math.PI) / 180)];
 
-/** Where the spacecraft is during each leg, for f from 0 to 1. */
-const PATH: Record<LegId, (f: number) => Pt> = {
-  tli: (f) => bez(onCircle(E.x, E.y, E.r + 14, -60), [480, 20], onCircle(M.x, M.y, ORBIT_R, 180), f),
-  loi: (f) => onCircle(M.x, M.y, ORBIT_R, 180 + 360 * f),
-  descent: (f) => {
-    const a = onCircle(M.x, M.y, ORBIT_R, 270);
-    const b = onCircle(M.x, M.y, M.r + 2, 270);
-    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
-  },
-  ascent: (f) => {
-    const a = onCircle(M.x, M.y, M.r + 2, 270);
-    const b = onCircle(M.x, M.y, ORBIT_R, 300);
-    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
-  },
-  tei: (f) => bez(onCircle(M.x, M.y, ORBIT_R, 60), [480, 560], onCircle(E.x, E.y, E.r + 2, 40), f),
-};
+function toScreen(xM: number, yM: number): Pt {
+  let px = E.x + (xM - EARTH_X_M) * SCALE;
+  let py = E.y - yM * SCALE;
+  for (const [body, cxM, rM] of [
+    [E, EARTH_X_M, R_EARTH_M],
+    [M, MOON_X_M, R_MOON_M],
+  ] as const) {
+    const dM = Math.hypot(xM - cxM, yM);
+    const grow = (body.r - rM * SCALE) * Math.exp(-Math.max(0, dM - rM) / FISHEYE_M);
+    if (dM > 0 && grow > 0) {
+      const k = grow / (dM * SCALE);
+      px += (px - body.x) * k;
+      py += (py - body.y) * k;
+    }
+  }
+  return [px, py];
+}
 
-const pathD = (id: LegId) => {
-  const pts = Array.from({ length: 41 }, (_, i) => PATH[id](i / 40));
-  return pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
-};
+/** One part of the story: flying out, a burn while at the Moon, or flying home. */
+interface Beat {
+  kind: 'out' | 'stay' | 'home';
+  /** Share of the scene's time. */
+  share: number;
+  /** Ledger legs that tick off when this beat starts. */
+  legs: LegId[];
+}
 
-export function MoonLeg({ ledger, roscoe, legSeconds = 3.2, onDone }: Props) {
+export function MoonLeg({ ledger, parkingAltM, kind, roscoe, sceneSeconds = 16, onDone }: Props) {
   const legs = ledger.legs;
   const stopAt = legs.findIndex((l) => !l.ok);
-  const lastLeg = stopAt >= 0 ? stopAt : legs.length;
-  // Progress in legs: 2.5 means halfway through the third leg.
-  const [p, setP] = useState(0);
+  const short = stopAt >= 0 ? legs[stopAt].id : undefined;
+  const trip = useMemo(() => moonTrajectory(parkingAltM, legs[0].availableMS, kind), [parkingAltM, legs, kind]);
+
+  // Screen path with cumulative length, split at the closest pass of the Moon.
+  const path = useMemo(() => {
+    const pts = trip.points.map((q) => toScreen(q.xM, q.yM));
+    const len = [0];
+    for (let i = 1; i < pts.length; i++) len.push(len[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const periT = trip.events.find((e) => e.id === 'loi' || e.id === 'perilune' || e.id === 'crash')?.tS;
+    const split = periT === undefined ? pts.length - 1 : trip.points.findIndex((q) => q.tS >= periT);
+    return { pts, len, split: Math.max(1, split) };
+  }, [trip]);
+
+  // The story, beat by beat. A leg that comes up short ends the story there.
+  const beats = useMemo((): Beat[] => {
+    const reached = trip.outcome === 'home';
+    const out: Beat[] = [{ kind: 'out', share: reached ? 0.4 : 1, legs: ['tli'] }];
+    if (!reached || short === 'tli') return out;
+    if (kind === 'flyby') return [...out, { kind: 'home', share: 0.45, legs: ['flyby'] }];
+    // Couldn't brake: the free return carries it round the Moon and home, like Apollo 13.
+    if (short === 'loi') return [...out, { kind: 'home', share: 0.45, legs: ['loi'] }];
+    out.push({ kind: 'stay', share: 0.08, legs: ['loi'] });
+    out.push({ kind: 'stay', share: 0.08, legs: ['descent'] });
+    if (short === 'descent') return out;
+    out.push({ kind: 'stay', share: 0.08, legs: ['ascent'] });
+    if (short === 'ascent') return out;
+    out.push({ kind: 'home', share: 0.4, legs: ['tei'] });
+    return out;
+  }, [trip, short, kind]);
+  const total = beats.reduce((a, b) => a + b.share, 0);
+
+  const [p, setP] = useState(0); // 0–1 through the scene
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
-
   useEffect(() => {
     let raf = 0;
-    let last = performance.now();
-    let prog = 0;
-    // A short leg that fails still gets a moment on screen before stopping.
-    const end = stopAt >= 0 ? stopAt + 0.35 : legs.length;
+    const start = performance.now();
+    const seconds = sceneSeconds * total;
     const loop = (now: number) => {
-      prog = Math.min(end, prog + (now - last) / 1000 / legSeconds);
-      last = now;
-      setP(prog);
-      if (prog >= end) {
-        setTimeout(() => doneRef.current(), stopAt >= 0 ? 900 : 600);
+      const f = Math.min(1, (now - start) / 1000 / seconds);
+      setP(f);
+      if (f >= 1) {
+        setTimeout(() => doneRef.current(), short ? 1200 : 700);
         return;
       }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [ledger, legSeconds, stopAt, legs.length]);
+  }, [trip, sceneSeconds, short, total]);
 
-  const i = Math.min(Math.floor(p), legs.length - 1);
-  const f = Math.min(1, p - i);
-  const leg = legs[i];
-  const failedHere = stopAt === i && p >= stopAt;
-  const craft = failedHere ? PATH[leg.id](Math.min(f, 0.35)) : PATH[leg.id](f);
-  // The lander rides down and back on its own; the main ship waits in Moon orbit.
-  const onLander = leg.id === 'descent' || leg.id === 'ascent';
-  const mothership = onLander ? PATH.loi((p - i) * 0.5) : null;
+  // Which beat, and how far through it.
+  let acc = 0;
+  let bi = 0;
+  while (bi < beats.length - 1 && p * total > acc + beats[bi].share) acc += beats[bi++].share;
+  const beat = beats[bi];
+  const f = Math.min(1, (p * total - acc) / beat.share);
+  const ticked = new Set(beats.slice(0, bi + 1).flatMap((b) => b.legs));
+
+  const along = (from: number, to: number, g: number): Pt => {
+    const target = path.len[from] + (path.len[to] - path.len[from]) * g;
+    let i = from;
+    while (i < to - 1 && path.len[i + 1] < target) i++;
+    const a = path.pts[i];
+    const b = path.pts[Math.min(i + 1, to)];
+    const seg = path.len[Math.min(i + 1, to)] - path.len[i] || 1;
+    const k = Math.min(1, (target - path.len[i]) / seg);
+    return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+  };
+  const last = path.pts.length - 1;
+  const goesHome = beats.some((b) => b.kind === 'home') || trip.outcome !== 'home';
+  const stayIndex = beats.filter((b) => b.kind === 'stay').indexOf(beat);
+  let craft: Pt;
+  let drawnTo: number;
+  if (beat.kind === 'out') {
+    const end = trip.outcome === 'home' ? path.split : last;
+    craft = along(0, end, f);
+    drawnTo = end;
+  } else if (beat.kind === 'stay') {
+    // Circling the Moon in lunar orbit.
+    const ang = (-90 + 360 * (stayIndex + f)) * (Math.PI / 180);
+    craft = [M.x + (M.r + 8) * Math.cos(ang), M.y + (M.r + 8) * Math.sin(ang)];
+    drawnTo = path.split;
+  } else {
+    craft = along(path.split, last, f);
+    drawnTo = last;
+  }
+  const landerLeg = beat.kind === 'stay' && (beat.legs[0] === 'descent' || beat.legs[0] === 'ascent') ? beat.legs[0] : undefined;
+  const landerY = landerLeg ? M.y - M.r - 9 + 9 * Math.min(1, (landerLeg === 'descent' ? f : 1 - f) * 1.3) : 0;
+
+  const endOfStory = bi === beats.length - 1 && f >= 1;
+  const failedHere = !!short && short !== 'loi' && endOfStory;
+  const fellBack = trip.outcome === 'fellBack';
+  const bad = (fellBack && f > 0.5) || failedHere;
+  const pathD = (to: number) => path.pts.slice(0, to + 1).map((q, i) => `${i ? 'L' : 'M'}${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join(' ');
+
+  const caption = (() => {
+    if (fellBack)
+      return f < 0.5
+        ? roscoe
+          ? 'Blasting off toward the Moon!'
+          : 'Trans-lunar injection (short)'
+        : roscoe
+          ? 'Not enough push! It fell back to Earth 😟'
+          : `TLI ${trip.burnMadeMS.toFixed(0)} of ${trip.burnNeededMS.toFixed(0)} m/s: apogee ${Math.round(trip.apogeeAltM / 1000).toLocaleString()} km, then back down`;
+    if (failedHere) return roscoe ? 'Not enough fuel! 😟' : `${legs[stopAt].name}: short by ${(legs[stopAt].neededMS - legs[stopAt].availableMS).toFixed(0)} m/s`;
+    if (short === 'loi' && beat.kind === 'home')
+      return roscoe ? "Couldn't slow down, so it swung around the Moon and home!" : 'No LOI: the free return brings it straight home (like Apollo 13)';
+    if (beat.kind === 'out') return roscoe ? 'Blasting off toward the Moon!' : 'Trans-lunar coast';
+    if (beat.kind === 'home' && f > 0.85) return roscoe ? 'Almost home!' : 'Approaching the atmosphere';
+    if (beat.kind === 'home' && kind === 'flyby') return roscoe ? 'Swinging around the back of the Moon!' : 'Free-return flyby';
+    const leg = legs.find((l) => l.id === beat.legs[0]);
+    return leg ? (roscoe ? `${leg.roscoe}!` : leg.name) : '';
+  })();
 
   return (
     <div className={`moon-leg ${roscoe ? 'roscoe' : ''}`}>
-      <svg viewBox="0 0 1000 600" className="moon-svg" role="img" aria-label="Trip to the Moon">
+      <svg viewBox="0 0 1000 600" className="moon-svg" role="img" aria-label="Flight path to the Moon">
         <defs>
           <radialGradient id="earthG" cx="40%" cy="35%">
             <stop offset="0%" stopColor="#6ec6ff" />
@@ -100,47 +186,45 @@ export function MoonLeg({ ledger, roscoe, legSeconds = 3.2, onDone }: Props) {
         {Array.from({ length: 70 }, (_, k) => (
           <circle key={k} cx={(k * 137.5) % 1000} cy={(k * 251.3) % 600} r={k % 3 === 0 ? 1.6 : 1} fill="#fff" opacity={0.6} />
         ))}
-        {legs.slice(0, lastLeg + (stopAt >= 0 ? 1 : 0)).map((l, k) => (
-          <path
-            key={l.id}
-            d={pathD(l.id)}
-            fill="none"
-            stroke={!l.ok ? '#ff6b6b' : k < p ? 'rgba(255,214,120,0.9)' : 'rgba(255,255,255,0.18)'}
-            strokeWidth={roscoe ? 4 : 2.5}
-            strokeDasharray={k < p ? undefined : '6 8'}
-          />
-        ))}
+        {/* The whole route faintly, then the part flown so far brightly. */}
+        <path d={pathD(goesHome ? last : path.split)} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={roscoe ? 3 : 2} strokeDasharray="6 8" />
+        <path d={pathD(drawnTo)} fill="none" stroke={bad ? '#ff6b6b' : 'rgba(255,214,120,0.9)'} strokeWidth={roscoe ? 4 : 2.5} />
         <circle cx={E.x} cy={E.y} r={E.r} fill="url(#earthG)" />
-        <path d={`M${E.x - 40} ${E.y - 30} q20 -20 40 -5 q15 20 -10 30 q-25 5 -30 -25z`} fill="#3f9b5a" opacity={0.85} />
+        <path d={`M${E.x - 17} ${E.y - 13} q9 -9 17 -2 q6 9 -4 13 q-11 2 -13 -11z`} fill="#3f9b5a" opacity={0.85} />
         <circle cx={M.x} cy={M.y} r={M.r} fill="url(#moonG)" />
-        <circle cx={M.x - 12} cy={M.y - 8} r={6} fill="#9a9ca1" />
-        <circle cx={M.x + 10} cy={M.y + 12} r={4} fill="#9a9ca1" />
-        <text x={E.x} y={E.y + E.r + 30} textAnchor="middle" className="moon-label">
+        <circle cx={M.x - 5} cy={M.y - 4} r={3} fill="#9a9ca1" />
+        <circle cx={M.x + 5} cy={M.y + 6} r={2} fill="#9a9ca1" />
+        {beat.kind === 'stay' && <circle cx={M.x} cy={M.y} r={M.r + 8} fill="none" stroke="rgba(255,214,120,0.5)" strokeDasharray="3 4" />}
+        <text x={E.x} y={E.y + E.r + 26} textAnchor="middle" className="moon-label">
           Earth
         </text>
-        <text x={M.x} y={M.y + M.r + 50} textAnchor="middle" className="moon-label">
+        <text x={M.x} y={M.y + M.r + 30} textAnchor="middle" className="moon-label">
           Moon
         </text>
-        {mothership && <circle cx={mothership[0]} cy={mothership[1]} r={roscoe ? 6 : 4} fill="#e8eef7" />}
-        <g transform={`translate(${craft[0]} ${craft[1]})`}>
-          {onLander ? (
-            <path d="M-7 4 L0 -8 L7 4 Z M-9 8 L-5 3 M9 8 L5 3" stroke="#ffd36e" strokeWidth={2} fill="#ffd36e" />
-          ) : (
-            <circle r={roscoe ? 8 : 5} fill={failedHere ? '#ff6b6b' : '#ffffff'} />
-          )}
-          {!failedHere && f < 0.5 && <circle r={roscoe ? 14 : 10} fill="none" stroke="#ffb02e" strokeWidth={2} opacity={1 - f * 2} />}
+        {landerLeg && (
+          <path transform={`translate(${M.x} ${landerY})`} d="M-6 3 L0 -7 L6 3 Z M-8 7 L-4 2 M8 7 L4 2" stroke="#ffd36e" strokeWidth={2} fill="#ffd36e" />
+        )}
+        <g transform={`translate(${craft[0].toFixed(1)} ${craft[1].toFixed(1)})`}>
+          <circle r={roscoe ? 7 : 5} fill={bad ? '#ff6b6b' : '#ffffff'} />
+          {f < 0.15 && !bad && <circle r={roscoe ? 16 : 12} fill="none" stroke="#ffb02e" strokeWidth={2} opacity={1 - f / 0.15} />}
         </g>
-        <text x={500} y={60} textAnchor="middle" className={`moon-caption ${failedHere ? 'bad' : ''}`}>
-          {failedHere ? (roscoe ? 'Not enough fuel! 😟' : `${leg.name}: short by ${(leg.neededMS - leg.availableMS).toFixed(0)} m/s`) : roscoe ? `${leg.roscoe}!` : leg.name}
+        <text x={500} y={60} textAnchor="middle" className={`moon-caption ${bad ? 'bad' : ''}`}>
+          {caption}
         </text>
+        {!roscoe && (
+          <text x={500} y={585} textAnchor="middle" className="moon-note">
+            Moon held still (it really circles Earth once a month) · Earth and Moon drawn bigger than life · trip {(trip.durationS / 86400).toFixed(1)} days
+            {trip.outcome === 'home' ? ` · closest pass ${Math.round(trip.periluneAltM / 1000)} km` : ''}
+          </text>
+        )}
       </svg>
 
       <ol className="ledger" aria-label="Delta-v ledger">
-        {legs.map((l, k) => {
-          const shown = k <= p;
+        {legs.map((l) => {
+          const shown = ticked.has(l.id);
           const frac = Math.min(1, l.availableMS / l.neededMS);
           return (
-            <li key={l.id} className={`${shown ? 'shown' : ''} ${shown ? (l.ok ? 'ok' : 'bad') : ''} ${k === i ? 'now' : ''}`}>
+            <li key={l.id} className={`${shown ? 'shown' : ''} ${shown ? (l.ok ? 'ok' : 'bad') : ''} ${beat.legs.includes(l.id) ? 'now' : ''}`}>
               <span className="ledger-name">
                 {shown ? (l.ok ? '✅' : '❌') : '⬜'} {roscoe ? l.roscoe : l.name}
               </span>

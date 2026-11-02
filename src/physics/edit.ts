@@ -101,7 +101,7 @@ export function setTank(
 
 export function setEngine(spec: RocketSpec, catalog: Catalog, i: number, engineId: string): RocketSpec {
   const e = stageEngine(spec, catalog, i);
-  const engine = catalog[engineId];
+  const engine = resolveCatalog(spec, catalog)[engineId];
   if (!e || engine?.type !== 'liquidEngine') return spec;
   let out = replaceRef(spec, i, e.index, { ...e.ref, part: engineId });
   // Keep the tank's propellant matched to the engine.
@@ -238,4 +238,41 @@ export function setBoosterRecovery(spec: RocketSpec, method: 'none' | 'parachute
 
 export function setHeatShield(spec: RocketSpec, scale: number): RocketSpec {
   return { ...spec, payload: { ...spec.payload, heatShieldScale: Math.max(0.5, Math.min(3, scale)) } };
+}
+
+// ---------- Free-design engines ----------
+
+/** Put a free-design engine on the stage, replacing its main engine. Updates it if it already exists. */
+export function fitCustomEngine(spec: RocketSpec, catalog: Catalog, i: number, engine: LiquidEngine): RocketSpec {
+  const isNew = !engine.id.startsWith('custom-engine-');
+  const part: LiquidEngine = isNew ? { ...engine, id: nextCustomId(spec, 'custom-engine-') } : engine;
+  const withPart: RocketSpec = { ...spec, customParts: [...(spec.customParts ?? []).filter((p) => p.id !== part.id), part] };
+  return prune(setEngine(withPart, catalog, i, part.id));
+}
+
+/** The catalog engine a free-design one started from (or the engine itself). */
+export function baseEngine(spec: RocketSpec, catalog: Catalog, engine: LiquidEngine): LiquidEngine {
+  const base = engine.basedOn ? resolveCatalog(spec, catalog)[engine.basedOn] : undefined;
+  return base?.type === 'liquidEngine' ? base : engine;
+}
+
+/** Roscoe's tinkering: scale an engine's push and fuel saving from the engine it started as. */
+export function tuneEngine(spec: RocketSpec, catalog: Catalog, i: number, thrustScale: number, ispScale: number): RocketSpec {
+  const e = stageEngine(spec, catalog, i);
+  if (!e) return spec;
+  const base = baseEngine(spec, catalog, e.part);
+  if (Math.abs(thrustScale - 1) < 1e-6 && Math.abs(ispScale - 1) < 1e-6) return prune(setEngine(spec, catalog, i, base.id));
+  const tuned: LiquidEngine = {
+    ...base,
+    id: e.part.id.startsWith('custom-engine-') ? e.part.id : base.id,
+    name: `Super ${base.name.replace(/^(SpaceX|Blue Origin|Rocketdyne|Aerojet) /, '')}`,
+    basedOn: base.id,
+    thrustSeaLevelN: Math.round(base.thrustSeaLevelN * thrustScale),
+    thrustVacuumN: Math.round(base.thrustVacuumN * thrustScale),
+    ispSeaLevelS: Math.round(base.ispSeaLevelS * ispScale),
+    ispVacuumS: Math.round(base.ispVacuumS * ispScale),
+    source: `Free design: ${base.name} with ${thrustScale.toFixed(2)}× push and ${ispScale.toFixed(2)}× fuel efficiency. Same weight.`,
+    confidence: 'estimate',
+  };
+  return fitCustomEngine(spec, catalog, i, tuned);
 }

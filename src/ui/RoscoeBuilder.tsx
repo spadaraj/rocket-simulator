@@ -4,6 +4,7 @@ import { catalog } from '../data/catalog';
 import { LEO_BUDGET_MS, TLI_BUDGET_MS, type StageDeltaV } from '../physics/deltaV';
 import {
   addStage,
+  baseEngine,
   finScale,
   liquidEngines,
   removeStage,
@@ -18,9 +19,11 @@ import {
   stageEngine,
   stageFill,
   stageTank,
+  tuneEngine,
 } from '../physics/edit';
+import { engineWarnings, worstLevel } from '../physics/design';
 import type { RocketSpec } from '../physics/types';
-import type { Vehicle } from '../physics/vehicle';
+import { resolveCatalog, type Vehicle } from '../physics/vehicle';
 import { RocketThumb } from './RocketThumb';
 
 interface Props {
@@ -39,6 +42,10 @@ interface Props {
 const ENGINES = liquidEngines(catalog);
 const BOOSTERS = ['srb-sls-5seg', 'srb-shuttle'];
 const BOOSTER_NAMES: Record<string, string> = { 'srb-sls-5seg': 'SLS boosters', 'srb-shuttle': 'Shuttle boosters' };
+const PUSH_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
+const SAVING_STEPS = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
+const nearest = (list: number[], x: number) => list.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a));
+const step = (list: number[], x: number, dir: number) => list[Math.max(0, Math.min(list.length - 1, list.indexOf(nearest(list, x)) + dir))];
 const shortName = (name: string) => name.replace(/^(SpaceX|Blue Origin|Rocketdyne) /, '');
 const FIN_SIZES = [
   { scale: 0, label: 'No fins' },
@@ -81,6 +88,39 @@ function Stepper({ label, value, onMinus, onPlus }: { label: string; value: stri
   );
 }
 
+/** Invent a better (or impossible) engine: more push, better fuel saving. */
+function Tinker({ spec, setSpec, i }: { spec: RocketSpec; setSpec: (s: RocketSpec) => void; i: number }) {
+  const eng = stageEngine(spec, catalog, i)!.part;
+  const base = baseEngine(spec, catalog, eng);
+  const push = eng.thrustVacuumN / base.thrustVacuumN;
+  const saving = eng.ispVacuumS / base.ispVacuumS;
+  const tune = (p: number, s: number) => setSpec(tuneEngine(spec, catalog, i, p, s));
+  const warnings = engineWarnings(eng).filter((w) => w.level !== 'info');
+  const worst = worstLevel(warnings);
+  return (
+    <>
+      <Stepper
+        label="🧪 💪 Push"
+        value={`${nearest(PUSH_STEPS, push)}×`}
+        onMinus={() => tune(step(PUSH_STEPS, push, -1), saving)}
+        onPlus={() => tune(step(PUSH_STEPS, push, 1), saving)}
+      />
+      <Stepper
+        label="🧪 ⛽ Fuel saving"
+        value={`${nearest(SAVING_STEPS, saving)}×`}
+        onMinus={() => tune(push, step(SAVING_STEPS, saving, -1))}
+        onPlus={() => tune(push, step(SAVING_STEPS, saving, 1))}
+      />
+      {worst && (
+        <div className={`rb-warn ${worst}`}>
+          {worst === 'impossible' ? '🚫 ' : '⚠️ '}
+          {warnings[0].roscoe}
+        </div>
+      )}
+    </>
+  );
+}
+
 function Chooser({ label, value, onPrev, onNext }: { label: string; value: string; onPrev: () => void; onNext: () => void }) {
   return (
     <div className="rb-row">
@@ -120,7 +160,11 @@ export function RoscoeBuilder(p: Props) {
       <div className="rb-cards">
         <div className="rb-card payload">
           <div className="rb-title">👩‍🚀 {spec.payload.name}</div>
-          <div className="rb-note">Crew capsule, service module and Moon lander</div>
+          <div className="rb-note">{spec.payload.parts
+              .map((r) => resolveCatalog(spec, catalog)[r.part])
+              .filter((x) => x?.type === 'payload' && !x.jettisonAfterFirstStagingS)
+              .map((x) => x!.name)
+              .join(' · ')}</div>
           <Chooser
             label="Heat shield"
             value={(SHIELDS.find((x) => Math.abs(x.scale - (spec.payload.heatShieldScale ?? 1)) < 0.01) ?? SHIELDS[0]).label}
@@ -156,8 +200,8 @@ export function RoscoeBuilder(p: Props) {
                   <Chooser
                     label="Engine"
                     value={shortName(eng.part.name)}
-                    onPrev={() => setSpec(setEngine(spec, catalog, i, cycle(ENGINES, ENGINES.find((e) => e.id === eng.part.id)!, -1).id))}
-                    onNext={() => setSpec(setEngine(spec, catalog, i, cycle(ENGINES, ENGINES.find((e) => e.id === eng.part.id)!, 1).id))}
+                    onPrev={() => setSpec(setEngine(spec, catalog, i, cycle(ENGINES, ENGINES.find((e) => e.id === baseEngine(spec, catalog, eng.part).id) ?? ENGINES[0], -1).id))}
+                    onNext={() => setSpec(setEngine(spec, catalog, i, cycle(ENGINES, ENGINES.find((e) => e.id === baseEngine(spec, catalog, eng.part).id) ?? ENGINES[0], 1).id))}
                   />
                   <Stepper
                     label="How many"
@@ -165,6 +209,7 @@ export function RoscoeBuilder(p: Props) {
                     onMinus={() => setSpec(setEngineCount(spec, catalog, i, (eng.ref.count ?? 1) - 1))}
                     onPlus={() => setSpec(setEngineCount(spec, catalog, i, (eng.ref.count ?? 1) + 1))}
                   />
+                  <Tinker spec={spec} setSpec={setSpec} i={i} />
                 </>
               )}
               {tank && (
@@ -240,7 +285,7 @@ export function RoscoeBuilder(p: Props) {
 
         <div className="rb-actions">
           <button className="btn big" onClick={p.onAutoSize} disabled={p.autoSizing}>
-            {p.autoSizing ? '⏳ Thinking…' : '✨ Make it reach the Moon'}
+            {p.autoSizing ? '⏳ Thinking…' : spec.mission.target === 'orbit' ? '✨ Make it reach space' : '✨ Make it reach the Moon'}
           </button>
           <button className="btn big" onClick={p.onReset}>
             ↺ Start over

@@ -286,7 +286,7 @@ export function fixCandidates(
     case 'burnUp':
     case 'crewG':
     case 'skipOut': {
-      const angle = spec.mission.reentryAngleDeg ?? DEFAULT_ENTRY_ANGLE_DEG[spec.mission.target === 'moon' ? 'moon' : 'orbit'];
+      const angle = spec.mission.reentryAngleDeg ?? DEFAULT_ENTRY_ANGLE_DEG[spec.mission.target === 'orbit' ? 'orbit' : 'moon'];
       const dir = type === 'skipOut' ? -1 : 1; // skipping out wants a steeper (more negative) angle
       for (const step of [0.5, 1, 1.5]) {
         const a = Math.round((angle + dir * step) * 10) / 10;

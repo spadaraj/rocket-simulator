@@ -1,0 +1,47 @@
+{
+  "id": "starship",
+  "name": "Starship",
+  "description": "The biggest rocket ever flown: 33 Raptors on the Super Heavy booster, six on the ship. The booster comes back to be caught by the tower.",
+  "launchSite": "KSC",
+  "stages": [
+    {
+      "name": "Super Heavy",
+      "color": "#c9ced6",
+      "parts": [
+        { "part": "raptor-2", "count": 33 },
+        { "part": "super-heavy-tank" },
+        { "part": "hot-stage-ring", "color": "#8e99a8" },
+        { "part": "tower-catch-pins" }
+      ],
+      "recovery": "propulsive",
+      "landingReserveKg": 330000
+    },
+    {
+      "name": "Starship",
+      "color": "#c9ced6",
+      "parts": [
+        { "part": "raptor-2", "count": 3 },
+        { "part": "raptor-vacuum", "count": 3 },
+        { "part": "starship-tank" }
+      ]
+    }
+  ],
+  "payload": {
+    "name": "Cargo",
+    "parts": [
+      { "part": "starship-cargo" },
+      { "part": "starship-nose", "color": "#c9ced6" }
+    ]
+  },
+  "mission": {
+    "target": "orbit",
+    "targetOrbitAltitudeM": 250000,
+    "pitchKick": { "timeS": 12, "angleDeg": 1.5 }
+  },
+  "notes": [
+    "Masses are best public estimates; SpaceX changes Starship often.",
+    "The real ship lights its engines before letting go of the booster (hot staging); the sim separates first.",
+    "The booster flies back to the launch tower to be caught; the sim brings it down wherever it falls.",
+    "Getting to the Moon needs refuelling in orbit, which the sim doesn't model, so this flight stops in orbit."
+  ]
+}
