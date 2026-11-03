@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { catalog, presets } from './data/catalog';
 import { stageDeltaV } from './physics/deltaV';
-import { setMission } from './physics/edit';
+import { blankRocket, setMission } from './physics/edit';
 import { goldenFor, scorecard } from './physics/golden';
 import { rollFaults } from './physics/faults';
 import type { FixResult } from './physics/fixes';
@@ -54,6 +54,26 @@ function loadChaos(): boolean {
   }
 }
 
+const MY_ROCKETS_KEY = 'myRockets';
+
+/** Rockets saved on this device. */
+function loadMyRockets(): RocketSpec[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(MY_ROCKETS_KEY) ?? '[]');
+    return Array.isArray(list) ? list.filter((r) => r?.id && Array.isArray(r.stages)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function storeMyRockets(list: RocketSpec[]) {
+  try {
+    localStorage.setItem(MY_ROCKETS_KEY, JSON.stringify(list));
+  } catch {
+    /* storage full or unavailable: the rockets stay for this visit only */
+  }
+}
+
 const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
 /** Chrome-family browsers (including Silk) offer to install the app with this event. */
@@ -86,7 +106,10 @@ export default function App() {
   const [mode, setModeState] = useState<Mode>(loadMode);
   const [presetId, setPresetId] = useState(presets[0].id);
   const [picking, setPicking] = useState(false);
-  const preset = presets.find((p) => p.id === presetId)!;
+  const [myRockets, setMyRockets] = useState<RocketSpec[]>(loadMyRockets);
+  const blank = useMemo(blankRocket, []);
+  const allRockets = useMemo(() => [blank, ...presets, ...myRockets], [blank, myRockets]);
+  const preset = allRockets.find((p) => p.id === presetId) ?? presets[0];
   const [spec, setSpec] = useState<RocketSpec>(preset);
   const [tab, setTab] = useState<Tab>('fly');
   const [phase, setPhase] = useState<Phase>('ready');
@@ -127,7 +150,7 @@ export default function App() {
   const mission = useMemo(() => flyMission(spec, catalog, { faults }), [spec, faults]);
   const record = mission.ascent;
   const deltaV = useMemo(() => stageDeltaV(spec, catalog), [spec]);
-  const thumbs = useMemo(() => Object.fromEntries(presets.map((p) => [p.id, buildVehicle(p, catalog)])), []);
+  const thumbs = useMemo(() => Object.fromEntries(allRockets.map((p) => [p.id, buildVehicle(p, catalog)])), [allRockets]);
   const feedback = useMemo(() => missionFeedback(mission), [mission]);
   const realFlight = useMemo(() => {
     const g = goldenFor(presetId);
@@ -141,10 +164,37 @@ export default function App() {
   );
 
   const choosePreset = (id: string) => {
-    const p = presets.find((x) => x.id === id)!;
+    const p = allRockets.find((x) => x.id === id)!;
     setPresetId(id);
     setSpec(p);
     setAutoMessage(null);
+  };
+
+  const startFromScratch = () => {
+    choosePreset(blank.id);
+    setTab('build');
+  };
+
+  // Saving overwrites the rocket if it is already one of yours, otherwise adds a new one.
+  const isMine = presetId.startsWith('mine-');
+  const saveRocket = () => {
+    const id = isMine ? presetId : `mine-${Date.now()}`;
+    const description = isMine ? spec.description : presetId === blank.id ? 'Your own rocket.' : `Your own rocket, based on the ${preset.name}.`;
+    const mine: RocketSpec = { ...spec, id, description };
+    const list = isMine ? myRockets.map((r) => (r.id === id ? mine : r)) : [...myRockets, mine];
+    setMyRockets(list);
+    storeMyRockets(list);
+    setPresetId(id);
+    setSpec(mine);
+  };
+
+  const deleteRocket = (id: string) => {
+    const r = myRockets.find((x) => x.id === id);
+    if (!r || !window.confirm(`Delete "${r.name}"?`)) return;
+    const list = myRockets.filter((x) => x.id !== id);
+    setMyRockets(list);
+    storeMyRockets(list);
+    if (presetId === id) choosePreset(presets[0].id);
   };
 
   // A changed design means a new flight: back to the pad, and start looking for fixes
@@ -274,19 +324,41 @@ export default function App() {
             <>
               <div className="picker-backdrop" onClick={() => setPicking(false)} />
               <div className="picker-menu">
-                {presets.map((p) => (
-                  <button
-                    key={p.id}
-                    className={`pick-card ${p.id === presetId ? 'on' : ''}`}
-                    onClick={() => {
-                      choosePreset(p.id);
-                      setPicking(false);
-                    }}
-                  >
-                    <RocketThumb vehicle={thumbs[p.id]} height={110} />
-                    <b>{p.name}</b>
-                    {!roscoe && <span className="muted">{p.description}</span>}
-                  </button>
+                <button
+                  className="pick-card scratch"
+                  onClick={() => {
+                    startFromScratch();
+                    setPicking(false);
+                  }}
+                >
+                  <span className="scratch-icon" aria-hidden="true">
+                    🛠️
+                  </span>
+                  <b>Start from scratch</b>
+                  <span className="muted">{roscoe ? 'Build your own!' : blank.description}</span>
+                </button>
+                {[...presets, ...myRockets].map((p, k) => (
+                  <Fragment key={p.id}>
+                    {k === presets.length && <div className="pick-section">⭐ Your rockets</div>}
+                    <div className="pick-wrap">
+                      <button
+                        className={`pick-card ${p.id === presetId ? 'on' : ''}`}
+                        onClick={() => {
+                          choosePreset(p.id);
+                          setPicking(false);
+                        }}
+                      >
+                        <RocketThumb vehicle={thumbs[p.id]} height={110} />
+                        <b>{p.name}</b>
+                        {!roscoe && <span className="muted">{p.description}</span>}
+                      </button>
+                      {p.id.startsWith('mine-') && (
+                        <button className="pick-delete" onClick={() => deleteRocket(p.id)} aria-label={`Delete ${p.name}`}>
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </Fragment>
                 ))}
               </div>
             </>
@@ -336,6 +408,8 @@ export default function App() {
               onAutoSize={autoSize}
               onReset={() => setSpec(preset)}
               onFly={() => setTab('fly')}
+              onSave={saveRocket}
+              saved={isMine && !modified}
             />
           ) : (
             <EngineerBuilder
@@ -348,6 +422,8 @@ export default function App() {
               autoMessage={autoMessage}
               onAutoSize={autoSize}
               onReset={() => setSpec(preset)}
+              onSave={saveRocket}
+              saved={isMine && !modified}
             />
           )}
         </main>

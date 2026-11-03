@@ -13,7 +13,12 @@ import {
   setEngine,
   setEngineCount,
   setFins,
+  PAYLOAD_SLOTS,
+  payloadSlot,
   setHeatShield,
+  setMission,
+  setName,
+  setPayloadSlot,
   setRecovery,
   setTank,
   stageEngine,
@@ -24,6 +29,7 @@ import {
 import { engineWarnings, worstLevel } from '../physics/design';
 import type { RocketSpec } from '../physics/types';
 import { resolveCatalog, type Vehicle } from '../physics/vehicle';
+import { NameField } from './NameField';
 import { RocketThumb } from './RocketThumb';
 
 interface Props {
@@ -37,11 +43,36 @@ interface Props {
   onAutoSize: () => void;
   onReset: () => void;
   onFly: () => void;
+  onSave: () => void;
+  /** True when this rocket is already saved and unchanged. */
+  saved: boolean;
 }
 
 const ENGINES = liquidEngines(catalog);
-const BOOSTERS = ['srb-sls-5seg', 'srb-shuttle'];
-const BOOSTER_NAMES: Record<string, string> = { 'srb-sls-5seg': 'SLS boosters', 'srb-shuttle': 'Shuttle boosters' };
+const BOOSTERS = ['srb-sls-5seg', 'srb-shuttle', 'falcon-side-booster'];
+const BOOSTER_NAMES: Record<string, string> = { 'srb-sls-5seg': 'SLS boosters', 'srb-shuttle': 'Shuttle boosters', 'falcon-side-booster': 'Falcon boosters' };
+const TARGETS: { id: RocketSpec['mission']['target']; label: string }[] = [
+  { id: 'orbit', label: '🌍 Space' },
+  { id: 'moonFlyby', label: '🌕 Around the Moon' },
+  { id: 'moon', label: '🌕 Land on the Moon' },
+];
+/** Short names for payload modules. */
+const MODULE_NAMES: Record<string, string> = {
+  'apollo-lm': 'Apollo lander',
+  'satellite-heavy': 'Big satellite',
+  'starship-cargo': '100 t of cargo',
+  'apollo-sm': 'Apollo',
+  'a139-service-module': 'A1-39',
+  'orion-esm': 'Orion',
+  'apollo-cm': 'Apollo',
+  'a139-command-module': 'A1-39',
+  'orion-cm': 'Orion',
+  'dragon-cargo': 'Dragon',
+  'fairing-5m': 'Fairing',
+  'apollo-les': 'Apollo',
+  'a139-escape-tower': 'A1-39',
+  'orion-las': 'Orion',
+};
 const PUSH_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 const SAVING_STEPS = [0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5];
 const nearest = (list: number[], x: number) => list.reduce((a, b) => (Math.abs(b - x) < Math.abs(a - x) ? b : a));
@@ -159,12 +190,30 @@ export function RoscoeBuilder(p: Props) {
 
       <div className="rb-cards">
         <div className="rb-card payload">
-          <div className="rb-title">👩‍🚀 {spec.payload.name}</div>
-          <div className="rb-note">{spec.payload.parts
-              .map((r) => resolveCatalog(spec, catalog)[r.part])
-              .filter((x) => x?.type === 'payload' && !x.jettisonAfterFirstStagingS)
-              .map((x) => x!.name)
-              .join(' · ')}</div>
+          <div className="rb-row">
+            <span className="rb-label">✏️ Name</span>
+            <NameField className="rb-name" value={spec.name} onChange={(n) => setSpec(setName(spec, n))} />
+          </div>
+          <Chooser
+            label="Where to?"
+            value={(TARGETS.find((t) => t.id === spec.mission.target) ?? TARGETS[0]).label}
+            onPrev={() => setSpec(setMission(spec, { target: cycle(TARGETS, TARGETS.find((t) => t.id === spec.mission.target) ?? TARGETS[0], -1).id }))}
+            onNext={() => setSpec(setMission(spec, { target: cycle(TARGETS, TARGETS.find((t) => t.id === spec.mission.target) ?? TARGETS[0], 1).id }))}
+          />
+          <div className="rb-title small">On top</div>
+          {PAYLOAD_SLOTS.map((slot) => {
+            const options: (string | null)[] = [null, ...slot.parts];
+            const current = payloadSlot(spec, slot.slot) ?? null;
+            return (
+              <Chooser
+                key={slot.slot}
+                label={slot.roscoe}
+                value={current ? MODULE_NAMES[current] ?? resolveCatalog(spec, catalog)[current]?.name ?? current : 'None'}
+                onPrev={() => setSpec(setPayloadSlot(spec, slot.slot, cycle(options, current, -1)))}
+                onNext={() => setSpec(setPayloadSlot(spec, slot.slot, cycle(options, current, 1)))}
+              />
+            );
+          })}
           <Chooser
             label="Heat shield"
             value={(SHIELDS.find((x) => Math.abs(x.scale - (spec.payload.heatShieldScale ?? 1)) < 0.01) ?? SHIELDS[0]).label}
@@ -289,6 +338,9 @@ export function RoscoeBuilder(p: Props) {
           </button>
           <button className="btn big" onClick={p.onReset}>
             ↺ Start over
+          </button>
+          <button className="btn big" onClick={p.onSave} disabled={p.saved}>
+            {p.saved ? '✓ Saved' : '💾 Save my rocket'}
           </button>
           <button className="btn big primary" onClick={p.onFly}>
             🚀 To the launch pad

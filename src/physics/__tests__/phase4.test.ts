@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { catalog, presets } from '../../data/catalog';
 import { autoSize } from '../autosize';
 import { engineWarnings, worstLevel } from '../design';
-import { stageEngine, tuneEngine } from '../edit';
+import { addStage, blankRocket, payloadSlot, setMission, setPayloadSlot, stageEngine, tuneEngine } from '../edit';
 import { GOLDEN_FLIGHTS, goldenFor, scorecard } from '../golden';
 import { flyMission } from '../mission';
 import { simulate } from '../simulate';
@@ -126,4 +126,36 @@ describe('Earth–Moon flight path', () => {
     const m = flyMission(preset('saturn-v'), catalog);
     expect(m.moon!.legs[0].neededMS).toBe(Math.ceil(solveFreeReturn(185e3).burnMS));
   });
+});
+
+describe('building from scratch', () => {
+  it('a blank rocket lifts off but needs another stage to reach orbit', () => {
+    const blank = blankRocket();
+    const one = simulate(blank, catalog);
+    expect(one.summary.liftoffTWR).toBeGreaterThan(1);
+    expect(one.outcome.success).toBe(false);
+    expect(flyMission(addStage(blank, catalog), catalog).ascent.outcome.success).toBe(true);
+  });
+
+  it('payload modules go in their slots, in stacking order, and can be removed', () => {
+    let s = setPayloadSlot(blankRocket(), 'tower', 'apollo-les');
+    s = setPayloadSlot(s, 'service', 'apollo-sm');
+    s = setPayloadSlot(s, 'lander', 'apollo-lm');
+    expect(s.payload.parts.map((p) => p.part)).toEqual(['apollo-lm', 'apollo-sm', 'a139-command-module', 'apollo-les']);
+    s = setPayloadSlot(s, 'capsule', 'orion-cm');
+    expect(payloadSlot(s, 'capsule')).toBe('orion-cm');
+    s = setPayloadSlot(s, 'lander', null);
+    expect(payloadSlot(s, 'lander')).toBeUndefined();
+    // Parts outside the slots (adapters) stay underneath.
+    const sat = setPayloadSlot(preset('saturn-v'), 'capsule', 'orion-cm');
+    expect(sat.payload.parts[0].part).toBe('apollo-sla');
+  });
+
+  it('auto-size turns a from-scratch Moon rocket into one that works', () => {
+    let s = addStage(addStage(blankRocket(), catalog), catalog);
+    s = setPayloadSlot(setPayloadSlot(s, 'service', 'apollo-sm'), 'lander', 'apollo-lm');
+    s = setMission(s, { target: 'moon' });
+    const r = autoSize(s, catalog);
+    expect(r.message).toBeTruthy();
+  }, 60_000);
 });

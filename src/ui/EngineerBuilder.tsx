@@ -15,17 +15,23 @@ import {
   setEngineCount,
   setFill,
   setFins,
+  PAYLOAD_SLOTS,
+  payloadSlot,
   setHeatShield,
+  setMission,
+  setName,
+  setPayloadSlot,
   setRecovery,
   setTank,
   stageEngine,
   stageFill,
   stageTank,
 } from '../physics/edit';
-import type { Part, RocketSpec } from '../physics/types';
+import type { MissionSpec, Part, RocketSpec } from '../physics/types';
 import type { Vehicle } from '../physics/vehicle';
 import { resolveCatalog } from '../physics/vehicle';
 import { EngineDesigner } from './EngineDesigner';
+import { NameField } from './NameField';
 import { RocketThumb } from './RocketThumb';
 
 interface Props {
@@ -39,6 +45,8 @@ interface Props {
   autoMessage: string | null;
   onAutoSize: () => void;
   onReset: () => void;
+  onSave: () => void;
+  saved: boolean;
 }
 
 const fmt = (x: number, d = 0) => x.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -109,8 +117,17 @@ export function EngineerBuilder(p: Props) {
             Add stage
           </button>
           <button className="btn small" onClick={p.onReset}>
-            Reset to preset
+            Reset
           </button>
+          <button className="btn small" onClick={p.onSave} disabled={p.saved}>
+            {p.saved ? 'Saved' : 'Save rocket'}
+          </button>
+          <NameField className="eb-name" value={spec.name} onChange={(n) => setSpec(setName(spec, n))} />
+          <select value={spec.mission.target} onChange={(e) => setSpec(setMission(spec, { target: e.target.value as MissionSpec['target'] }))} aria-label="Mission">
+            <option value="orbit">Earth orbit</option>
+            <option value="moon">Moon landing</option>
+            <option value="moonFlyby">Moon flyby</option>
+          </select>
           {p.autoMessage && <span className="muted eb-msg">{p.autoMessage}</span>}
         </div>
 
@@ -234,6 +251,21 @@ export function EngineerBuilder(p: Props) {
                 </label>
               </td>
             </tr>
+            {PAYLOAD_SLOTS.map((slot) => (
+              <tr key={slot.slot}>
+                <td>{slot.label}</td>
+                <td colSpan={12}>
+                  <select value={payloadSlot(spec, slot.slot) ?? ''} onChange={(e) => setSpec(setPayloadSlot(spec, slot.slot, e.target.value || null))}>
+                    <option value="">None</option>
+                    {slot.parts.map((id) => (
+                      <option key={id} value={id}>
+                        {catalog[id]?.name ?? id} · {fmt((catalog[id]?.massKg ?? 0) / 1000, 1)} t
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
             <tr>
               <td>{spec.payload.name}</td>
               <td colSpan={8} className="muted">

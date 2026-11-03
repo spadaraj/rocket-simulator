@@ -276,3 +276,67 @@ export function tuneEngine(spec: RocketSpec, catalog: Catalog, i: number, thrust
   };
   return fitCustomEngine(spec, catalog, i, tuned);
 }
+
+// ---------- Building from scratch ----------
+
+/** A plain starting point: one stage with a few engines and a tank, and a crew capsule on top. */
+export function blankRocket(): RocketSpec {
+  const tank = designTank('custom-tank-1', 5, 20, 'CH4/LOX');
+  return {
+    id: 'blank',
+    name: 'My rocket',
+    description: 'Start from scratch: one stage and a capsule. Add stages, engines, boosters and modules.',
+    launchSite: 'KSC',
+    stages: [
+      {
+        name: 'Stage 1',
+        color: '#f4f6fa',
+        parts: [{ part: 'raptor-2', count: 3 }, { part: tank.id }],
+      },
+    ],
+    payload: { name: 'Payload', parts: [{ part: 'a139-command-module', color: '#c9d1dc' }] },
+    mission: {
+      target: 'orbit',
+      targetOrbitAltitudeM: 200000,
+      pitchKick: { timeS: 10, angleDeg: 1.5 },
+      maxQThrottle: { aboveQPa: 25000, throttle: 0.6 },
+    },
+    customParts: [tank],
+  };
+}
+
+export type PayloadSlot = 'lander' | 'cargo' | 'service' | 'capsule' | 'fairing' | 'tower';
+
+/** What can go in each payload slot, bottom of the payload to top. */
+export const PAYLOAD_SLOTS: { slot: PayloadSlot; label: string; roscoe: string; parts: string[] }[] = [
+  { slot: 'lander', label: 'Moon lander', roscoe: '🌕 Moon lander', parts: ['apollo-lm'] },
+  { slot: 'cargo', label: 'Cargo', roscoe: '📦 Cargo', parts: ['satellite-heavy', 'starship-cargo'] },
+  { slot: 'service', label: 'Service module', roscoe: '🔋 Service module', parts: ['apollo-sm', 'a139-service-module', 'orion-esm'] },
+  { slot: 'capsule', label: 'Capsule', roscoe: '👩‍🚀 Capsule', parts: ['apollo-cm', 'a139-command-module', 'orion-cm', 'dragon-cargo'] },
+  { slot: 'fairing', label: 'Nose fairing', roscoe: '🥚 Nose cover', parts: ['fairing-5m'] },
+  { slot: 'tower', label: 'Escape tower', roscoe: '🗼 Escape tower', parts: ['apollo-les', 'a139-escape-tower', 'orion-las'] },
+];
+
+const SLOT_COLORS: Partial<Record<PayloadSlot, string>> = { service: '#f4f6fa', capsule: '#c9d1dc', fairing: '#f4f6fa', tower: '#f4f6fa' };
+
+const slotOf = (partId: string) => PAYLOAD_SLOTS.find((s) => s.parts.includes(partId))?.slot;
+
+export function payloadSlot(spec: RocketSpec, slot: PayloadSlot): string | undefined {
+  return spec.payload.parts.find((r) => slotOf(r.part) === slot)?.part;
+}
+
+/** Put a module in a payload slot (or empty it with null). Other payload parts stay underneath. */
+export function setPayloadSlot(spec: RocketSpec, slot: PayloadSlot, partId: string | null): RocketSpec {
+  const others = spec.payload.parts.filter((r) => !slotOf(r.part));
+  const slots = PAYLOAD_SLOTS.map(({ slot: s }) => {
+    if (s !== slot) return spec.payload.parts.find((r) => slotOf(r.part) === s);
+    if (!partId) return undefined;
+    const old = spec.payload.parts.find((r) => slotOf(r.part) === s);
+    return { part: partId, color: old?.color ?? SLOT_COLORS[s] };
+  }).filter((r): r is PartRef => !!r);
+  return { ...spec, payload: { ...spec.payload, parts: [...others, ...slots] } };
+}
+
+export function setName(spec: RocketSpec, name: string): RocketSpec {
+  return { ...spec, name };
+}

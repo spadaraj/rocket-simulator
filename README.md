@@ -8,6 +8,7 @@ A browser-based 2D rocket engineering sandbox. Pick a rocket, launch it, and wat
 - **Phase 2:** rocket builder (swap engines and boosters, resize tanks, add or remove stages) in both modes; "Make it reach the Moon" auto-size; Engineer charts with run comparison and CSV export; fix suggestions that are tested by re-flying the rocket.
 - **Phase 3:** the whole mission. Coasting systems checklist with Chaos Mode faults; boosters on parachutes and a powered core-stage landing (with a landing cam); the Moon trip as an animated delta-v ledger; capsule re-entry with heating, g-loads and splashdown; tumbling as a failure (centre of mass vs. centre of pressure vs. engine steering).
 - **Phase 4:** realism and reach. Falcon 9, Falcon Heavy, Space Shuttle, SLS (Artemis II) and Starship presets; a scorecard against real flights; design-your-own engines with warnings when the numbers aren't believable; the Moon trip as a real Earth–Moon free-return flight path; installable on a tablet's home screen, working offline.
+- **Build from scratch:** start from a blank rocket (one stage and a capsule), add stages, engines, boosters and payload modules (capsule, service module, Moon lander, cargo, nose fairing, escape tower), pick where it's going, and save your rockets on the device.
 
 ## Run it
 

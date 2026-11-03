@@ -1674,3 +1674,60 @@ input {
   fill: var(--ink-dim);
   font-size: 14px;
 }
+
+.rb-name {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.rb-title.small {
+  font-size: 16px;
+  margin: 10px 0 2px;
+  color: var(--ink-dim);
+}
+
+.eb-name {
+  width: 160px;
+}
+
+.pick-wrap {
+  position: relative;
+  display: grid;
+}
+
+.pick-section {
+  grid-column: 1 / -1;
+  font-weight: 800;
+  margin-top: 6px;
+}
+
+.pick-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(214, 58, 58, 0.85);
+  color: #fff;
+  cursor: pointer;
+}
+
+.pick-card.scratch {
+  border: 2px dashed rgba(255, 255, 255, 0.4);
+  justify-content: center;
+}
+
+.scratch-icon {
+  font-size: 48px;
+  line-height: 110px;
+}
