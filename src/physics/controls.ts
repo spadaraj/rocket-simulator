@@ -24,14 +24,20 @@ export type ControlId =
   | 'chaos'
   | 'targetHeight'
   | 'whereTo'
-  | 'lander' // the Moon lander slot
+  | 'lander' // the lander slot (Moon, then Mars and Venus)
+  | 'launchDay' // planet trips: where to, and when to go
+  | 'arrive' // what to do when you get there
+  | 'rover' // Mars rovers in the lander slot
+  | 'marsLander' // Space Q's Mars lander and the Venus landers
+  | 'kickStage' // a braking stage for the far end
+  | 'ion' // ion probes
   | 'tinker' // invent an engine
   | 'scratch'; // start from scratch, name and save
 
 export const ALL_CONTROLS: ControlId[] = [
   'speed', 'build', 'engines', 'engineType', 'tank', 'autoSize', 'stageStrip', 'addStage', 'payload', 'heatShield',
   'comeHome', 'fins', 'easeOff', 'stronger', 'airPush', 'landIt', 'landingFuel', 'boosters', 'boosterChutes', 'chaos',
-  'targetHeight', 'whereTo', 'lander', 'tinker', 'scratch',
+  'targetHeight', 'whereTo', 'lander', 'tinker', 'scratch', 'launchDay', 'arrive', 'rover', 'marsLander', 'kickStage', 'ion',
 ];
 
 /** Which control a fix changes, from its id. */
@@ -51,6 +57,10 @@ export function fixControl(fixId: string): ControlId | undefined {
     [/^shield/, 'heatShield'],
     [/^reserve-/, 'landingFuel'],
     [/^add-lander/, 'lander'],
+    [/^launch-window/, 'launchDay'],
+    [/^lander-/, 'lander'],
+    [/^braking-stage/, 'kickStage'],
+    [/^probe-/, 'payload'],
   ];
   return rules.find(([re]) => re.test(fixId))?.[1];
 }

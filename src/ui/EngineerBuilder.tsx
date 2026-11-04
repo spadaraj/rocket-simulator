@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { catalog } from '../data/catalog';
 import { G0_MS2 } from '../physics/constants';
+import { applyTrip, ARRIVALS, arrivalsFor, TRIPS, tripKey } from '../physics/trips';
 import type { StageDeltaV } from '../physics/deltaV';
 import {
   addStage,
@@ -27,7 +28,7 @@ import {
   stageFill,
   stageTank,
 } from '../physics/edit';
-import type { MissionSpec, Part, RocketSpec } from '../physics/types';
+import type { Arrival, Part, RocketSpec } from '../physics/types';
 import type { Vehicle } from '../physics/vehicle';
 import { resolveCatalog } from '../physics/vehicle';
 import { EngineDesigner } from './EngineDesigner';
@@ -123,11 +124,22 @@ export function EngineerBuilder(p: Props) {
             {p.saved ? 'Saved' : 'Save rocket'}
           </button>
           <NameField className="eb-name" value={spec.name} onChange={(n) => setSpec(setName(spec, n))} />
-          <select value={spec.mission.target} onChange={(e) => setSpec(setMission(spec, { target: e.target.value as MissionSpec['target'] }))} aria-label="Mission">
-            <option value="orbit">Earth orbit</option>
-            <option value="moon">Moon landing</option>
-            <option value="moonFlyby">Moon flyby</option>
+          <select value={tripKey(spec.mission)} onChange={(e) => setSpec(applyTrip(spec, e.target.value))} aria-label="Mission">
+            {TRIPS.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.label}
+              </option>
+            ))}
           </select>
+          {spec.mission.target === 'planet' && (
+            <select value={spec.mission.arrival ?? 'flyby'} onChange={(e) => setSpec(setMission(spec, { arrival: e.target.value as Arrival }))} aria-label="Arrival">
+              {arrivalsFor(spec.mission).map((a) => (
+                <option key={a} value={a}>
+                  {ARRIVALS[a].label}
+                </option>
+              ))}
+            </select>
+          )}
           {p.autoMessage && <span className="muted eb-msg">{p.autoMessage}</span>}
         </div>
 

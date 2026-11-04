@@ -434,7 +434,8 @@ This weekend's goal: Roscoe presses Launch on a rough A1-39 and watches it fly t
   - **Story and coaching:** Flight Director Did and the story lines, controls that unlock as he learns, hints that get stronger, and the Skill Book.
   - **The missions:** the mission framework, stars and saved progress; Chapters 1–2, including burns in orbit.
 - [x] 5b: Chapter 3, the Moon: four missions, the Moon lander control, one-way cargo landers, the Apollo 13 lifeboat fault, and burn-by-burn Moon failure cards
-- [ ] 5c: Solar system map, transfers and launch windows; Chapters 4–5 (Mars landing, asteroid belt, Ceres)
+- [x] 5c: Solar system map, transfers and launch windows; Chapters 4–5 (Mars landing, asteroid belt, Ceres)
+  - Changes from the plan: the braking stage unlocks at Mission 22 (Mercury needs it), not 26; Planet Hunter comes after Chapter 4 and Deep Space Explorer after Chapter 5; Mission 25 visits a made-up space rock, Q-7, at 2.4 AU.
 - [ ] 5d: Gravity assists, the outer planets, dwarf planets; Chapters 6–7 and the finale
 
 ## Appendix: kickoff prompt for Claude Code

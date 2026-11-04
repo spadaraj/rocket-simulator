@@ -33,13 +33,13 @@ export function missionFeedback(m: MissionRecord): Feedback {
     const splash = m.reentry ? ` Splashdown at ${m.reentry.splashSpeedMS.toFixed(1)} m/s after a ${m.reentry.peakGLoad.toFixed(1)} g re-entry.` : '';
     return {
       success: true,
-      roscoeTitle: toMoon ? 'You went to the Moon and back!' : m.raise ? 'Your satellite made it to the high orbit!' : m.reentry ? 'You went to space and back!' : 'You made it to space!',
+      roscoeTitle: m.planet ? 'Mission accomplished out in the solar system!' : toMoon ? 'You went to the Moon and back!' : m.raise ? 'Your satellite made it to the high orbit!' : m.reentry ? 'You went to space and back!' : 'You made it to space!',
       roscoeFix: recovered.length
         ? `And you got back the ${recovered.join(' and the ').toLowerCase()}!`
         : m.reentry
           ? 'The crew splashed down safely!'
           : 'Great flying!',
-      title: toMoon ? 'Mission complete: Moon landing and safe return' : 'Mission complete',
+      title: m.planet ? `Mission complete: ${m.planet.arrival} at ${m.planet.destination}, ${Math.round(m.planet.totalDays)} days` : toMoon ? 'Mission complete: Moon landing and safe return' : 'Mission complete',
       why: `${fb.why}${splash}`,
       fixes: recovered.length ? [`Recovered: ${recovered.join(', ')}.`] : ['Nothing was recovered; every stage was thrown away.'],
     };
@@ -63,6 +63,33 @@ export function missionFeedback(m: MissionRecord): Feedback {
         title: `Moon trip short at ${d.leg}`,
         why: `${d.by} needs ${num(d.neededMS).toFixed(0)} m/s for ${String(d.leg).toLowerCase()} but has ${num(d.availableMS).toFixed(0)} m/s.`,
         fixes: ['More propellant in the upper stage.', "Don't hold back fuel to land the first stage.", 'A higher-Isp upper-stage engine.'],
+      };
+    case 'planetShort':
+      return {
+        success: false,
+        roscoeTitle:
+          d.legId === 'depart'
+            ? 'Made it to space, but not enough push to leave Earth!'
+            : d.legId === 'capture'
+              ? 'It zoomed right past!'
+              : d.legId === 'entry'
+                ? 'It burned up in the air!'
+                : d.legId === 'touchdown'
+                  ? 'Crash landing!'
+                  : d.legId === 'survive'
+                    ? 'Cooked and crushed!'
+                    : 'Ran out of fuel on the way!',
+        roscoeFix: 'Try the fixes below.',
+        title: `Trip short at ${d.leg}`,
+        why:
+          d.unit === 'check'
+            ? `${d.leg}: ${d.by}.`
+            : d.unit === 'min'
+              ? `${d.by} lasted ${num(d.availableMS).toFixed(0)} min on the surface; the goal is ${num(d.neededMS).toFixed(0)} min.`
+              : `${d.by} needs ${num(d.neededMS).toFixed(0)} m/s for ${String(d.leg).toLowerCase()} but has ${num(d.availableMS).toFixed(0)} m/s.${
+                  d.legId === 'depart' && Math.abs(num(d.offsetDays)) > 14 ? ` Launching ${Math.round(num(d.offsetDays))} days from the best day; on the best day it would need ${num(d.windowDepartMS).toFixed(0)} m/s.` : ''
+                }`,
+        fixes: ['Launch in the window.', 'More propellant in the upper stage.', 'A probe or lander built for this destination.'],
       };
     case 'burnUp':
       return {

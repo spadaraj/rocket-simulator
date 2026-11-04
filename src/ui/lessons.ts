@@ -187,6 +187,102 @@ export function lessonFor(m: MissionRecord, spec: RocketSpec): Lesson | undefine
         skill: 'lander',
       };
     }
+    case 'planetShort': {
+      const where = String(d.destination ?? '');
+      const name = { venus: 'Venus', mars: 'Mars', mercury: 'Mercury', belt: 'the belt', vesta: 'Vesta', ceres: 'Ceres', vestaCeres: 'Vesta', rock: 'the space rock' }[where] ?? 'the planet';
+      const pushMeter: Meter = { emoji: '⛽', label: 'Push', value: num(d.availableMS), limit: num(d.neededMS), unit: 'm/s', want: 'above', limitLabel: 'needed' };
+      const by = String(d.by ?? '');
+      switch (d.legId) {
+        case 'depart': {
+          const missedWindow = Math.abs(num(d.offsetDays)) > 14 && num(d.windowDepartMS) <= num(d.availableMS);
+          if (missedWindow)
+            return {
+              what: `The planets weren't lined up, so leaving Earth for ${name} took too big a push.`,
+              why: [
+                `${name} and Earth are always moving around the Sun. You have to aim for where ${name} will be when you get there.`,
+                'On the best day, the path is short and easy. Months early or late, it takes a much bigger push.',
+              ],
+              meter: pushMeter,
+              fixes: [{ text: 'Change the launch day to 🎯 Best day.', control: 'launchDay' }],
+              skill: 'window',
+            };
+          const heavy = spec.payload.parts.some((r) => r.part === 'armored-probe');
+          return {
+            what: `It reached space, but couldn't push hard enough to leave Earth for ${name}.`,
+            why: [
+              'Leaving Earth for another world takes a second huge push after reaching space.',
+              heavy ? 'The armor made the probe super heavy, and heavy things take a much bigger push.' : `${by} needed more fuel than it had.`,
+            ],
+            meter: pushMeter,
+            fixes: [
+              ...(heavy ? [{ text: 'Carry something lighter on top.', control: 'payload' as const }] : []),
+              { text: 'Change the launch day to 🎯 Best day.', control: 'launchDay' },
+              { text: 'Give the top stage a bigger tank.', control: 'tank' },
+              { text: `Let "Make it reach" pick the fuel.`, control: 'autoSize' },
+            ],
+            skill: heavy ? 'belt' : 'window',
+          };
+        }
+        case 'capture':
+          return {
+            what: by === 'No braking engine' ? `It zoomed right past ${name}! Nothing could brake.` : `It got to ${name}, but couldn't brake hard enough to stay.`,
+            why:
+              where === 'mercury'
+                ? ['Heading toward the Sun is like rolling downhill: you go faster and faster.', 'By Mercury the probe is going so fast that its little engine can’t stop it.']
+                : [`A probe arrives going super fast. To stay, it has to fire its own engine to slow down.`, by === 'No braking engine' ? 'This probe has no big engine, so it can only fly past.' : 'Every brake drinks fuel, and this one ran dry.'],
+            meter: pushMeter,
+            fixes:
+              where === 'mercury'
+                ? [{ text: 'Add a braking stage.', control: 'kickStage' }]
+                : ['vesta', 'ceres', 'vestaCeres', 'rock'].includes(where)
+                  ? [{ text: 'Try a probe with a super fuel-saving engine.', control: 'payload' }]
+                  : [{ text: 'Pick a probe with its own engine.', control: 'payload' }],
+            skill: where === 'mercury' ? 'sunward' : ['vesta', 'ceres', 'vestaCeres', 'rock'].includes(where) ? 'ion' : 'brake',
+          };
+        case 'hop':
+        case 'cruise':
+          return {
+            what: `It ran out of fuel on the way (${String(d.leg).toLowerCase()}).`,
+            why: ['Every stop means braking, then speeding up again to leave.', 'A normal rocket engine drinks fuel fast. An ion engine sips it.'],
+            meter: pushMeter,
+            fixes: [{ text: 'Try a probe with a super fuel-saving engine.', control: 'payload' }],
+            skill: 'ion',
+          };
+        case 'entry':
+          return {
+            what: `It burned up diving into ${name}'s air!`,
+            why: [`${name} has air. Diving in that fast makes things glow hot.`, `${by.replace(/ \(no heat shield\)$/, '')} has no heat shield. The Moon has no air, so Moon landers don't need one.`],
+            fixes: [{ text: `Pick a lander built for ${name}.`, control: 'lander' }],
+            skill: 'tripPlan',
+          };
+        case 'touchdown':
+          return {
+            what: by.includes('no landing rockets') ? 'The parachute opened, but it still hit the ground way too fast!' : 'The landing rockets ran out of fuel before touchdown!',
+            why: ['Mars air is about 100 times thinner than Earth’s. A parachute only slows you to about 300 km/h.', 'Rockets have to do the last part of the landing.'],
+            meter: pushMeter,
+            fixes: [{ text: 'Pick a lander with landing rockets.', control: 'lander' }],
+            skill: 'marsLanding',
+          };
+        case 'survive':
+          return {
+            what: `It landed, but Venus cooked and crushed it after ${num(d.availableMS).toFixed(0)} minutes!`,
+            why: ['Venus is hotter than a pizza oven, and its air presses down 90 times harder than ours.', 'Landers need thick walls and lots of cooling to last.'],
+            meter: { emoji: '⏱️', label: 'Working time', value: num(d.availableMS), limit: num(d.neededMS), unit: 'min', want: 'above', limitLabel: 'goal' },
+            fixes: [{ text: 'Pick a lander built for Venus.', control: 'lander' }],
+            skill: 'venus',
+          };
+        case 'home':
+        case 'capsule':
+        default:
+          return {
+            what: d.legId === 'capsule' ? 'It came home, but had no capsule to bring the sample down!' : 'It got to the space rock, but ran out of fuel to come home.',
+            why: ['Going out is only half the trip. Coming home takes just as big a push again.', 'And the sample needs a little capsule with a heat shield to fall through Earth’s air.'],
+            meter: d.legId === 'capsule' ? undefined : pushMeter,
+            fixes: [{ text: 'Pick a probe built to bring a sample home.', control: 'payload' }],
+            skill: 'sampleReturn',
+          };
+      }
+    }
     case 'burnUp':
       return {
         what: 'Coming home, the capsule got too hot for its heat shield.',

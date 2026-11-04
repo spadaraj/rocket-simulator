@@ -81,6 +81,23 @@ export interface Payload extends PartBase {
   parachuteDragAreaM2?: number;
   /** Rides on the side of the stack instead of on top (the Shuttle orbiter). */
   sideMount?: boolean;
+  /** Ion engine: a gentle push for a very long time (Dawn). Propellant is included in massKg. */
+  ion?: { propellantKg: number; ispS: number; thrustN: number };
+  /** Carries a little heat-shielded capsule to bring a sample back to Earth. */
+  sampleCapsule?: boolean;
+  /** A kick stage that fires first when braking at the far end, then drops off. Uses `propulsion`. */
+  brakingStage?: boolean;
+  /** Lands on a planet with air: heat shield, parachute, and maybe landing rockets. */
+  planetLander?: {
+    heatShield: boolean;
+    parachute: boolean;
+    /** Carries a rover. */
+    rover?: boolean;
+    /** Landing rockets, fired after the heat shield and parachute are gone. */
+    rockets?: { propellantKg: number; ispS: number; massAtIgnitionKg: number };
+    /** How long it keeps working on Venus's surface. */
+    venusMinutes?: number;
+  };
 }
 
 export interface AeroPart extends PartBase {
@@ -127,12 +144,20 @@ export interface StageSpec {
   landingReserveKg?: number;
 }
 
+export type Destination = 'venus' | 'mars' | 'mercury' | 'belt' | 'vesta' | 'ceres' | 'vestaCeres' | 'rock';
+export type Arrival = 'flyby' | 'orbit' | 'land' | 'sample';
+
 export interface MissionSpec {
   /**
    * moonFlyby: loop around the Moon and come straight home, no landing (Artemis II).
    * highOrbit: reach the parking orbit, then two burns up to highOrbitAltitudeM.
+   * planet: leave Earth for `destination`, and do `arrival` there.
    */
-  target: 'orbit' | 'moon' | 'moonFlyby' | 'highOrbit';
+  target: 'orbit' | 'moon' | 'moonFlyby' | 'highOrbit' | 'planet';
+  destination?: Destination;
+  arrival?: Arrival;
+  /** Days after the best launch day in the window (negative = early). */
+  launchOffsetDays?: number;
   /** highOrbit target: final circular orbit height (geostationary: 35,786 km). */
   highOrbitAltitudeM?: number;
   targetOrbitAltitudeM: number;
@@ -221,7 +246,7 @@ export interface FlightEvent {
 /** Ascent failures. */
 export type FailureType = 'noLiftoff' | 'outOfFuel' | 'breakup' | 'crash' | 'tumble' | 'engineFailure';
 /** Everything that can go wrong on the whole mission. */
-export type MissionFailureType = FailureType | 'orbitShort' | 'moonShort' | 'burnUp' | 'skipOut' | 'crewG' | 'crashLanding';
+export type MissionFailureType = FailureType | 'orbitShort' | 'moonShort' | 'planetShort' | 'burnUp' | 'skipOut' | 'crewG' | 'crashLanding';
 
 // ---------- Chaos Mode ----------
 

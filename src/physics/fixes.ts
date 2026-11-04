@@ -11,6 +11,7 @@ import {
   setFins,
   setHeatShield,
   setMission,
+  payloadSlot,
   setPayloadSlot,
   setRecovery,
   setStructure,
@@ -310,6 +311,51 @@ export function fixCandidates(
       break;
     }
 
+    case 'planetShort': {
+      const legId = String(detail.legId ?? '');
+      const dest = String(detail.destination ?? spec.mission.destination ?? 'mars');
+      const cargo = payloadSlot(spec, 'cargo');
+      const swap = (id: string, slot: 'cargo' | 'lander' | 'kick', part: string, title: string, roscoe: string, cost = 1) =>
+        payloadSlot(spec, slot) !== part && out.push({ id, title, roscoe, cost, apply: (s) => setPayloadSlot(s, slot, part) });
+      if (legId === 'depart') {
+        if (Math.abs(Number(detail.offsetDays ?? 0)) > 14 && Number(detail.windowDepartMS ?? Infinity) < Number(detail.neededMS ?? 0))
+          out.push({
+            id: 'launch-window',
+            title: `Launch on the best day of the window (${Math.round(Number(detail.offsetDays))} days → 0)`,
+            roscoe: 'Launch when the planets line up',
+            cost: 1,
+            apply: (s) => setMission(s, { launchOffsetDays: 0 }),
+          });
+        if (cargo === 'armored-probe') swap('probe-light', 'cargo', 'planet-probe', 'Swap the armored probe for the light one', 'Leave the armor at home');
+        for (const c of fixCandidates('moonShort', spec, catalog)) out.push({ ...c, cost: c.cost + 1 });
+        break;
+      }
+      if (legId === 'capture' || legId === 'hop') {
+        if (dest === 'mercury' && !payloadSlot(spec, 'kick')) swap('braking-stage', 'kick', 'spaceq-braking-stage', 'Add the Space Q braking stage', 'Add a braking stage');
+        if (['vesta', 'ceres', 'vestaCeres', 'rock'].includes(dest)) swap('probe-ion', 'cargo', 'ion-probe', 'Use the Dawn-style ion probe', 'Use the ion probe');
+        if (['mars', 'venus'].includes(dest)) swap('probe-orbiter', 'cargo', 'mars-orbiter', 'Use the Mars orbiter (it has its own engine)', 'Use a probe with its own engine');
+        if (dest === 'mercury') swap('probe-messenger', 'cargo', 'messenger-probe', 'Use the Sun-side probe (it has its own engine)', 'Use a probe with its own engine', 2);
+        break;
+      }
+      if (legId === 'entry' || legId === 'touchdown') {
+        if (dest === 'venus') swap('lander-venus', 'lander', 'venus-lander', 'Use the Venus lander', 'Use the Venus lander');
+        else {
+          const rover = payloadSlot(spec, 'lander')?.startsWith('rover');
+          if (rover) swap('lander-skycrane', 'lander', 'rover-skycrane', 'Use the rover with a sky crane', 'Use the rover with a sky crane');
+          swap('lander-mars', 'lander', 'spaceq-mars-lander', 'Use the Space Q Mars lander', 'Use the Space Q Mars lander', rover ? 2 : 1);
+        }
+        break;
+      }
+      if (legId === 'survive') {
+        swap('lander-venus', 'lander', 'venus-lander', 'Use the Venus lander (lasts about 2 hours)', 'Use the Venus lander');
+        swap('lander-venus-cool', 'lander', 'spaceq-venus-lander', 'Use the Space Q cool lander (lasts about 5 hours)', 'Use the extra-cool Venus lander', 2);
+        break;
+      }
+      if (legId === 'cruise' || legId === 'home' || legId === 'capsule')
+        swap('probe-sample', 'cargo', 'sample-probe', 'Use the Space Q sample-return probe (more xenon, sample capsule)', 'Use the sample-return probe');
+      break;
+    }
+
     case 'burnUp':
     case 'crewG':
     case 'skipOut': {
@@ -395,7 +441,10 @@ export function findFixes(
     if (!fixed || fixed === spec) continue;
     const m = flyMission(fixed, catalog, opts);
     const next = m.result.failure?.type;
-    if (next && failureRank(next) <= failureRank(type)) continue;
+    // A trip that now fails at a later burn is still progress.
+    const legs = m.planet?.legs ?? m.moon?.legs ?? [];
+    const later = next === type && legs.findIndex((l) => !l.ok) > legs.findIndex((l) => l.id === detail.legId);
+    if (next && failureRank(next) <= failureRank(type) && !later) continue;
     // A launch problem is only fixed if the rocket now reaches orbit.
     if (failureRank(type) <= failureRank('crash') && !m.ascent.outcome.success) continue;
     const o = m.ascent.outcome;

@@ -31,6 +31,9 @@ import { createContext, useContext } from 'react';
 import type { ControlId } from '../physics/controls';
 import { engineWarnings, worstLevel } from '../physics/design';
 import { goesToMoon } from '../physics/raise';
+import { DESTINATIONS } from '../physics/planets';
+import { applyTrip, ARRIVALS, arrivalsFor, launchDayLabel, launchDays, TRIPS, tripKey, wrappedOffset } from '../physics/trips';
+import { WindowMap } from './SolarMap';
 import { DEFAULT_ENTRY_ANGLE_DEG } from '../physics/reentry';
 import type { RocketSpec } from '../physics/types';
 import { resolveCatalog, type Vehicle } from '../physics/vehicle';
@@ -69,16 +72,36 @@ function useGate(id?: ControlId) {
 const ENGINES = liquidEngines(catalog);
 const BOOSTERS = ['srb-sls-5seg', 'srb-shuttle', 'falcon-side-booster'];
 const BOOSTER_NAMES: Record<string, string> = { 'srb-sls-5seg': 'SLS boosters', 'srb-shuttle': 'Shuttle boosters', 'falcon-side-booster': 'Falcon boosters' };
-const TARGETS: { id: RocketSpec['mission']['target']; label: string }[] = [
-  { id: 'orbit', label: '🌍 Space' },
-  { id: 'highOrbit', label: '🛰️ High orbit' },
-  { id: 'moonFlyby', label: '🌕 Around the Moon' },
-  { id: 'moon', label: '🌕 Land on the Moon' },
-];
+/** Parts that only show once their mission has taught them (the current part always shows). */
+const PART_CONTROL: Record<string, ControlId> = {
+  'planet-probe': 'launchDay',
+  'mars-orbiter': 'launchDay',
+  'messenger-probe': 'launchDay',
+  'armored-probe': 'launchDay',
+  'rover-chute': 'rover',
+  'rover-skycrane': 'rover',
+  'spaceq-mars-lander': 'marsLander',
+  'venus-lander': 'marsLander',
+  'spaceq-venus-lander': 'marsLander',
+  'ion-probe': 'ion',
+  'sample-probe': 'ion',
+};
 /** Short names for payload modules. */
 const MODULE_NAMES: Record<string, string> = {
-  'apollo-lm': 'Apollo lander',
-  'spaceq-cargo-lander': 'Space Q cargo lander',
+  'apollo-lm': '🌕 Apollo lander',
+  'spaceq-cargo-lander': '🌕 Space Q cargo lander',
+  'rover-chute': '🔴 Rover with parachute',
+  'rover-skycrane': '🔴 Rover with sky crane',
+  'spaceq-mars-lander': '🔴 Space Q Mars lander',
+  'venus-lander': '🟡 Venus lander',
+  'spaceq-venus-lander': '🟡 Extra-cool Venus lander',
+  'planet-probe': 'Little planet probe',
+  'mars-orbiter': 'Mars orbiter',
+  'messenger-probe': 'Sun-side probe',
+  'armored-probe': 'Armored probe',
+  'ion-probe': '⚡ Ion probe',
+  'sample-probe': '⚡ Sample-return probe',
+  'spaceq-braking-stage': 'Space Q braking stage',
   'moon-base': 'Moon base',
   'satellite-small': 'Little satellite',
   'satellite-heavy': 'Big satellite',
@@ -227,7 +250,16 @@ export function RoscoeBuilder(p: Props) {
   const order = spec.stages.map((_, i) => i).reverse();
   const can = (id: ControlId) => !p.controls || p.controls.has(id);
   const fresh = (id: ControlId) => (p.fresh?.has(id) ? ' fresh' : '');
-  const showPayloadCard = (['scratch', 'whereTo', 'targetHeight', 'payload', 'lander', 'heatShield', 'comeHome'] as ControlId[]).some(can);
+  const showPayloadCard = (['scratch', 'whereTo', 'targetHeight', 'payload', 'lander', 'heatShield', 'comeHome', 'launchDay', 'arrive', 'kickStage'] as ControlId[]).some(can);
+  const trips = TRIPS.filter((t) => !t.planet || can('launchDay') || tripKey(spec.mission) === t.key);
+  const trip = trips.find((t) => t.key === tripKey(spec.mission)) ?? trips[0];
+  const planetTrip = spec.mission.target === 'planet';
+  const arrivals = arrivalsFor(spec.mission);
+  const arrival = spec.mission.arrival ?? arrivals[0];
+  const days = launchDays(spec.mission);
+  const offset = wrappedOffset(spec.mission);
+  const dayIndex = days.reduce((a, d, k) => (Math.abs(d - offset) < Math.abs(days[a] - offset) ? k : a), 0);
+  const needsWindow = planetTrip && DESTINATIONS[spec.mission.destination ?? 'mars'].stops.length > 0;
   const baseAngle = DEFAULT_ENTRY_ANGLE_DEG[goesToMoon(spec.mission.target) ? 'moon' : 'orbit'];
   const angle = spec.mission.reentryAngleDeg ?? baseAngle;
   const angleChoice = ANGLES.reduce((a, b) => (Math.abs(baseAngle + b.offset - angle) < Math.abs(baseAngle + a.offset - angle) ? b : a));
@@ -237,7 +269,13 @@ export function RoscoeBuilder(p: Props) {
   };
   const heightKm = Math.round(spec.mission.targetOrbitAltitudeM / 1000);
   const strength = STRENGTHS.reduce((a, b) => (Math.abs(b.scale - (spec.structureScale ?? 1)) < Math.abs(a.scale - (spec.structureScale ?? 1)) ? b : a));
-  const goalWord = goesToMoon(spec.mission.target) ? 'the Moon' : spec.mission.target === 'highOrbit' ? 'high orbit' : 'space';
+  const goalWord = goesToMoon(spec.mission.target)
+    ? 'the Moon'
+    : spec.mission.target === 'highOrbit'
+      ? 'high orbit'
+      : planetTrip
+        ? DESTINATIONS[spec.mission.destination ?? 'mars'].name
+        : 'space';
 
   return (
     <Gate.Provider value={{ controls: p.controls, fresh: p.fresh }}>
@@ -258,10 +296,31 @@ export function RoscoeBuilder(p: Props) {
           <Chooser
             id="whereTo"
             label="Where to?"
-            value={(TARGETS.find((t) => t.id === spec.mission.target) ?? TARGETS[0]).label}
-            onPrev={() => setSpec(setMission(spec, { target: cycle(TARGETS, TARGETS.find((t) => t.id === spec.mission.target) ?? TARGETS[0], -1).id }))}
-            onNext={() => setSpec(setMission(spec, { target: cycle(TARGETS, TARGETS.find((t) => t.id === spec.mission.target) ?? TARGETS[0], 1).id }))}
+            value={trip.roscoe}
+            onPrev={() => setSpec(applyTrip(spec, cycle(trips, trip, -1).key))}
+            onNext={() => setSpec(applyTrip(spec, cycle(trips, trip, 1).key))}
           />
+          {planetTrip && arrivals.length > 1 && (
+            <Chooser
+              id="arrive"
+              label="What to do there"
+              value={ARRIVALS[arrival].roscoe}
+              onPrev={() => setSpec(setMission(spec, { arrival: cycle(arrivals, arrival, -1) }))}
+              onNext={() => setSpec(setMission(spec, { arrival: cycle(arrivals, arrival, 1) }))}
+            />
+          )}
+          {needsWindow && (
+            <>
+              <Chooser
+                id="launchDay"
+                label="📅 Launch day"
+                value={launchDayLabel(days[dayIndex])}
+                onPrev={() => setSpec(setMission(spec, { launchOffsetDays: days[Math.max(0, dayIndex - 1)] }))}
+                onNext={() => setSpec(setMission(spec, { launchOffsetDays: days[Math.min(days.length - 1, dayIndex + 1)] }))}
+              />
+              {can('launchDay') && <WindowMap mission={spec.mission} />}
+            </>
+          )}
           <Chooser
             id="targetHeight"
             label="📏 How high"
@@ -271,12 +330,12 @@ export function RoscoeBuilder(p: Props) {
           />
           {can('payload') && <div className="rb-title small">On top</div>}
           {PAYLOAD_SLOTS.map((slot) => {
-            const options: (string | null)[] = [null, ...slot.parts];
             const current = payloadSlot(spec, slot.slot) ?? null;
+            const options: (string | null)[] = [null, ...slot.parts.filter((id) => id === current || !PART_CONTROL[id] || can(PART_CONTROL[id]))];
             return (
               <Chooser
                 key={slot.slot}
-                id={slot.slot === 'lander' ? 'lander' : 'payload'}
+                id={slot.slot === 'lander' ? 'lander' : slot.slot === 'kick' ? 'kickStage' : 'payload'}
                 label={slot.roscoe}
                 value={current ? MODULE_NAMES[current] ?? resolveCatalog(spec, catalog)[current]?.name ?? current : 'None'}
                 onPrev={() => setSpec(setPayloadSlot(spec, slot.slot, cycle(options, current, -1)))}

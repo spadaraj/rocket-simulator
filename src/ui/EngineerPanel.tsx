@@ -6,7 +6,8 @@ import type { Scorecard } from '../physics/golden';
 import { goesToMoon } from '../physics/raise';
 import type { MissionRecord } from '../physics/mission';
 import { CREW_G_LIMIT, DEFAULT_ENTRY_ANGLE_DEG } from '../physics/reentry';
-import type { Fault, FlightRecord, MissionSpec, Sample } from '../physics/types';
+import type { Arrival, Fault, FlightRecord, MissionSpec, RocketSpec, Sample } from '../physics/types';
+import { applyTrip, ARRIVALS, arrivalsFor, TRIPS, tripKey } from '../physics/trips';
 import type { Vehicle } from '../physics/vehicle';
 import { ScorecardTable } from './Scorecard';
 
@@ -312,12 +313,37 @@ export function EngineerPanel(p: Props) {
         <h4>Flight settings</h4>
         <label className="slider">
           <span>Mission</span>
-          <select value={m.target} onChange={(e) => p.setMission({ target: e.target.value as MissionSpec['target'] })}>
-            <option value="orbit">Earth orbit</option>
-            <option value="moon">Moon landing</option>
-            <option value="moonFlyby">Moon flyby (free return)</option>
+          <select value={tripKey(m)} onChange={(e) => p.setMission(applyTrip({ mission: m } as RocketSpec, e.target.value).mission)}>
+            {TRIPS.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.label}
+              </option>
+            ))}
           </select>
         </label>
+        {m.target === 'planet' && (
+          <>
+            <label className="slider">
+              <span>Arrival</span>
+              <select value={m.arrival ?? 'flyby'} onChange={(e) => p.setMission({ arrival: e.target.value as Arrival })}>
+                {arrivalsFor(m).map((a) => (
+                  <option key={a} value={a}>
+                    {ARRIVALS[a].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Slider
+              label="Launch day vs. best"
+              value={m.launchOffsetDays ?? 0}
+              min={-180}
+              max={180}
+              step={5}
+              unit=" d"
+              onChange={(v) => p.setMission({ launchOffsetDays: v })}
+            />
+          </>
+        )}
         <Slider
           label="Pitch kick time"
           value={m.pitchKick.timeS}

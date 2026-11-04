@@ -16,6 +16,7 @@ import { FlightCanvas } from './ui/FlightCanvas';
 import { missionFeedback } from './ui/messages';
 import { MissionControl } from './ui/MissionControl';
 import { MoonLeg } from './ui/MoonLeg';
+import { PlanetLeg } from './ui/PlanetLeg';
 import { ReentryView } from './ui/ReentryView';
 import { sampleAt, usePlayback } from './ui/playback';
 import { EngineerResult, RoscoeResult, type FixState } from './ui/ResultCard';
@@ -39,8 +40,8 @@ import { StageStrip } from './ui/StageStrip';
 import { autoSizeAsync, findFixesAsync } from './ui/whatIf';
 
 type Mode = 'roscoe' | 'engineer';
-type Phase = 'ready' | 'countdown' | 'flying' | 'raise' | 'moon' | 'reentry' | 'done';
-type Scene = 'flight' | 'raise' | 'moon' | 'reentry';
+type Phase = 'ready' | 'countdown' | 'flying' | 'raise' | 'moon' | 'planet' | 'reentry' | 'done';
+type Scene = 'flight' | 'raise' | 'moon' | 'planet' | 'reentry';
 type Screen = 'home' | 'map' | 'skills' | 'sandbox' | 'mission';
 
 const NO_STATS: PlayStats = { usedSlow: false, chaos: false, saved: false };
@@ -149,6 +150,9 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('fly');
   const [phase, setPhase] = useState<Phase>('ready');
   const [doneScene, setDoneScene] = useState<Scene>('flight');
+  // Bumped on every replay so a scene that is still on screen starts again from the top.
+  const [replayN, setReplayN] = useState(0);
+  const replay = (p: Phase) => (setReplayN((n) => n + 1), setPhase(p));
   const [chaos, setChaosState] = useState(loadChaos);
   const [seed, setSeed] = useState(newSeed);
   const [fix, setFix] = useState<FixState | undefined>();
@@ -276,6 +280,7 @@ export default function App() {
     if (!record.outcome.success) return finish('flight');
     if (mission.raise) return setPhase('raise');
     if (mission.moon) return setPhase('moon');
+    if (mission.planet) return setPhase('planet');
     if (mission.reentry) return setPhase('reentry');
     finish('flight');
   };
@@ -333,7 +338,8 @@ export default function App() {
     setSaved([...saved, { id: n, label: `${spec.name}${modified ? ' (modified)' : ''} #${n}`, color, record }]);
   };
 
-  const scene: Scene = phase === 'raise' ? 'raise' : phase === 'moon' ? 'moon' : phase === 'reentry' ? 'reentry' : phase === 'done' ? doneScene : 'flight';
+  const scene: Scene =
+    phase === 'raise' ? 'raise' : phase === 'moon' ? 'moon' : phase === 'planet' ? 'planet' : phase === 'reentry' ? 'reentry' : phase === 'done' ? doneScene : 'flight';
 
   // ---------- Mission Mode ----------
 
@@ -432,10 +438,11 @@ export default function App() {
 
   const replays: { label: string; onClick: () => void }[] = [
     { label: roscoe ? '🚀 Watch the launch' : 'Replay launch', onClick: () => (setPhase('flying'), pb.seek(0), pb.play()) },
-    ...(mission.raise ? [{ label: roscoe ? '🛰️ Watch the climb' : 'Replay orbit raise', onClick: () => setPhase('raise') }] : []),
-    ...(mission.moon ? [{ label: roscoe ? '🌕 Watch the Moon trip' : 'Replay Moon leg', onClick: () => setPhase('moon') }] : []),
+    ...(mission.raise ? [{ label: roscoe ? '🛰️ Watch the climb' : 'Replay orbit raise', onClick: () => replay('raise') }] : []),
+    ...(mission.moon ? [{ label: roscoe ? '🌕 Watch the Moon trip' : 'Replay Moon leg', onClick: () => replay('moon') }] : []),
+    ...(mission.planet ? [{ label: roscoe ? '🪐 Watch the trip' : 'Replay planet trip', onClick: () => replay('planet') }] : []),
     ...(mission.reentry && (!mission.moon || mission.moon.success)
-      ? [{ label: roscoe ? '🔥 Watch coming home' : 'Replay re-entry', onClick: () => setPhase('reentry') }]
+      ? [{ label: roscoe ? '🔥 Watch coming home' : 'Replay re-entry', onClick: () => replay('reentry') }]
       : []),
   ];
 
@@ -669,6 +676,7 @@ export default function App() {
             )}
             {scene === 'raise' && mission.raise && (
               <RaiseView
+                key={replayN}
                 ledger={mission.raise}
                 roscoe={roscoe}
                 sceneSeconds={roscoe ? 14 : 9}
@@ -677,6 +685,7 @@ export default function App() {
             )}
             {scene === 'moon' && mission.moon && (
               <MoonLeg
+                key={replayN}
                 ledger={mission.moon}
                 parkingAltM={spec.mission.targetOrbitAltitudeM}
                 kind={mission.moon.trip}
@@ -685,13 +694,24 @@ export default function App() {
                 onDone={phase === 'moon' ? afterMoon : () => {}}
               />
             )}
-            {scene === 'reentry' && mission.reentry && (
-              <ReentryView record={mission.reentry} roscoe={roscoe} sceneSeconds={roscoe ? 24 : 14} onDone={phase === 'reentry' ? () => finish('reentry') : () => {}} />
+            {scene === 'planet' && mission.planet && (
+              <PlanetLeg key={replayN} ledger={mission.planet} roscoe={roscoe} sceneSeconds={roscoe ? 22 : 14} onDone={phase === 'planet' ? () => finish('planet') : () => {}} />
             )}
-            {(phase === 'raise' || phase === 'moon' || phase === 'reentry') && (
+            {scene === 'reentry' && mission.reentry && (
+              <ReentryView key={replayN} record={mission.reentry} roscoe={roscoe} sceneSeconds={roscoe ? 24 : 14} onDone={phase === 'reentry' ? () => finish('reentry') : () => {}} />
+            )}
+            {(phase === 'raise' || phase === 'moon' || phase === 'planet' || phase === 'reentry') && (
               <button
                 className="btn small skip"
-                onClick={phase === 'raise' ? () => (mission.reentry ? setPhase('reentry') : finish('raise')) : phase === 'moon' ? afterMoon : () => finish('reentry')}
+                onClick={
+                  phase === 'raise'
+                    ? () => (mission.reentry ? setPhase('reentry') : finish('raise'))
+                    : phase === 'moon'
+                      ? afterMoon
+                      : phase === 'planet'
+                        ? () => finish('planet')
+                        : () => finish('reentry')
+                }
               >
                 Skip ⏭
               </button>

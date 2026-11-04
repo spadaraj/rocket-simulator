@@ -727,6 +727,195 @@
     }
   },
   {
+    "id": "planet-probe",
+    "type": "payload",
+    "name": "Little planet probe",
+    "massKg": 250,
+    "source": "Mariner 2 (1962) weighed 203 kg; rounded up for a small modern flyby probe.",
+    "confidence": "estimate",
+    "notes": "Flyby only: no big engine. Rides inside the nose, so it is not drawn."
+  },
+  {
+    "id": "armored-probe",
+    "type": "payload",
+    "name": "Armored probe",
+    "massKg": 12000,
+    "source": "Space Q design: the little planet probe wrapped in thick metal plates to stop asteroid hits. Real probes don't need this: the belt is mostly empty.",
+    "confidence": "estimate",
+    "notes": "Rides inside the nose, so it is not drawn."
+  },
+  {
+    "id": "mars-orbiter",
+    "type": "payload",
+    "name": "Mars orbiter",
+    "massKg": 2180,
+    "propulsion": {
+      "propellantKg": 1149,
+      "ispS": 230
+    },
+    "source": "Mars Reconnaissance Orbiter (2005): 2,180 kg at launch with 1,149 kg of hydrazine; six 170 N main thrusters.",
+    "confidence": "published",
+    "notes": "Its own engine brakes it into orbit. Isp is an estimate for its hydrazine thrusters."
+  },
+  {
+    "id": "messenger-probe",
+    "type": "payload",
+    "name": "Sun-side probe",
+    "massKg": 1107,
+    "propulsion": {
+      "propellantKg": 600,
+      "ispS": 317
+    },
+    "source": "MESSENGER (2004): 1,107 kg at launch with about 600 kg of propellant and a 660 N bipropellant engine (Isp about 317 s).",
+    "confidence": "published",
+    "notes": "A sunshade keeps it cool so close to the Sun."
+  },
+  {
+    "id": "ion-probe",
+    "type": "payload",
+    "name": "Ion probe",
+    "massKg": 1218,
+    "ion": {
+      "propellantKg": 425,
+      "ispS": 3100,
+      "thrustN": 0.091
+    },
+    "source": "Dawn (2007): 1,218 kg at launch with 425 kg of xenon; NSTAR ion engines at about 3,100 s Isp and 91 mN thrust.",
+    "confidence": "published",
+    "notes": "Super fuel-saving, but its push is gentle (about the weight of a sheet of paper), so trips take years."
+  },
+  {
+    "id": "sample-probe",
+    "type": "payload",
+    "name": "Space Q sample-return probe",
+    "massKg": 2600,
+    "ion": {
+      "propellantKg": 1400,
+      "ispS": 3100,
+      "thrustN": 0.3
+    },
+    "sampleCapsule": true,
+    "source": "Space Q design: a Dawn-style ion probe with over three times the xenon, three engines firing at once, a sample arm like OSIRIS-REx's, and a small heat-shielded capsule like Stardust's for the trip back down.",
+    "confidence": "estimate",
+    "notes": "The sample capsule drops into Earth's air on its own and parachutes down."
+  },
+  {
+    "id": "spaceq-braking-stage",
+    "type": "payload",
+    "name": "Space Q braking stage",
+    "shape": "cylinder",
+    "massKg": 8000,
+    "diameterM": 3,
+    "lengthM": 4,
+    "propulsion": {
+      "propellantKg": 7000,
+      "ispS": 320
+    },
+    "brakingStage": true,
+    "source": "Space Q design: a storable-propellant kick stage (like a Fregat or the Apollo service engine) that waits through the cruise and fires to brake at the far end.",
+    "confidence": "estimate",
+    "notes": "Fires first when braking, then drops off when empty; the probe's own engine does the rest."
+  },
+  {
+    "id": "rover-chute",
+    "type": "payload",
+    "name": "Rover with only a parachute",
+    "shape": "capsule",
+    "massKg": 3200,
+    "diameterM": 4.5,
+    "diameterTopM": 1.8,
+    "lengthM": 3,
+    "planetLander": {
+      "heatShield": true,
+      "parachute": true,
+      "rover": true
+    },
+    "source": "Space Q test: a Perseverance-size rover in its heat shield and backshell, with the parachute but no landing rockets.",
+    "confidence": "estimate",
+    "notes": "Shows why Mars needs rockets as well: its air is too thin for a parachute alone."
+  },
+  {
+    "id": "rover-skycrane",
+    "type": "payload",
+    "name": "Rover with sky crane",
+    "shape": "capsule",
+    "massKg": 3650,
+    "diameterM": 4.5,
+    "diameterTopM": 1.8,
+    "lengthM": 3,
+    "planetLander": {
+      "heatShield": true,
+      "parachute": true,
+      "rover": true,
+      "rockets": {
+        "propellantKg": 400,
+        "ispS": 225,
+        "massAtIgnitionKg": 1950
+      }
+    },
+    "source": "Mars 2020 / Perseverance: about 3,650 kg entering Mars (rover 1,025 kg, descent stage with about 400 kg of hydrazine, heat shield and backshell). Eight throttled hydrazine engines.",
+    "confidence": "estimate",
+    "notes": "Heat shield, then a supersonic parachute, then the sky crane lowers the rover on cables."
+  },
+  {
+    "id": "spaceq-mars-lander",
+    "type": "payload",
+    "name": "Space Q Mars lander",
+    "shape": "capsule",
+    "massKg": 22000,
+    "diameterM": 7,
+    "diameterTopM": 3,
+    "lengthM": 6,
+    "planetLander": {
+      "heatShield": true,
+      "parachute": true,
+      "rockets": {
+        "propellantKg": 5000,
+        "ispS": 345,
+        "massAtIgnitionKg": 16000
+      }
+    },
+    "source": "Space Q design: a 7 m heat shield, big parachutes and methane landing engines, carrying about 8 t of supplies for a future crew.",
+    "confidence": "estimate",
+    "notes": "One-way cargo lander for Mars."
+  },
+  {
+    "id": "venus-lander",
+    "type": "payload",
+    "name": "Venus lander",
+    "shape": "capsule",
+    "massKg": 4400,
+    "diameterM": 2.4,
+    "diameterTopM": 1.2,
+    "lengthM": 2.5,
+    "planetLander": {
+      "heatShield": true,
+      "parachute": true,
+      "venusMinutes": 127
+    },
+    "source": "Venera 13 (1982): about 760 kg lander inside a 2.4 m entry shell, part of a 4,400 kg spacecraft. It sent pictures for 127 minutes.",
+    "confidence": "published",
+    "notes": "A ball-shaped pressure hull, padded and pre-chilled before landing."
+  },
+  {
+    "id": "spaceq-venus-lander",
+    "type": "payload",
+    "name": "Space Q cool lander",
+    "shape": "capsule",
+    "massKg": 7500,
+    "diameterM": 3,
+    "diameterTopM": 1.4,
+    "lengthM": 3,
+    "planetLander": {
+      "heatShield": true,
+      "parachute": true,
+      "venusMinutes": 300
+    },
+    "source": "Space Q design: a thicker hull, more insulation and a big block of ice-cold phase-change material to soak up heat. A guess at about five hours.",
+    "confidence": "estimate",
+    "notes": "Heavier, but lasts longer in Venus's 465 °C air."
+  },
+  {
     "id": "rs-25-shuttle",
     "type": "liquidEngine",
     "name": "RS-25 (Shuttle main engine, 104.5%)",

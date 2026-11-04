@@ -4,6 +4,7 @@
 // If a stage is set to land, first find how much fuel it must hold back to land.
 
 import { tliNeededMS } from './moon';
+import { DESTINATIONS, planetDepartureNeededMS } from './planets';
 import { GEO_ALTITUDE_M, goesToMoon, hohmann } from './raise';
 import { setFill, setRecovery, stageFill } from './edit';
 import { flyMission } from './mission';
@@ -44,9 +45,16 @@ export function autoSize(input: RocketSpec, catalog: Catalog): AutoSizeResult {
   const target = spec.mission.target;
   const toMoon = goesToMoon(target);
   const raise = target === 'highOrbit' ? hohmann(spec.mission.targetOrbitAltitudeM, spec.mission.highOrbitAltitudeM ?? GEO_ALTITUDE_M) : undefined;
-  const tliMS = toMoon ? tliNeededMS(spec.mission.targetOrbitAltitudeM) : raise ? Math.ceil(raise.dv1 + raise.dv2) : 0;
+  const planet = target === 'planet';
+  const tliMS = toMoon
+    ? tliNeededMS(spec.mission.targetOrbitAltitudeM)
+    : raise
+      ? Math.ceil(raise.dv1 + raise.dv2)
+      : planet
+        ? Math.ceil(planetDepartureNeededMS(spec, catalog))
+        : 0;
   const needDv = tliMS * (1 + MARGIN);
-  const goal = toMoon ? 'the Moon' : raise ? 'the high orbit' : 'orbit';
+  const goal = toMoon ? 'the Moon' : raise ? 'the high orbit' : planet ? DESTINATIONS[spec.mission.destination ?? 'mars'].name : 'orbit';
   const withFills = (fills: number[]) => fills.reduce((s, f, i) => setFill(s, catalog, i, f), spec);
   const landed = (m: ReturnType<typeof flyMission>) =>
     landIdx < 0 || m.recoveries.some((r) => r.kind === 'stage' && r.stageIndex === landIdx && r.outcome === 'landed');

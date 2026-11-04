@@ -20,7 +20,16 @@ export type SkillId =
   | 'lander'
   | 'lifeboat'
   | 'cargo'
-  | 'corridor';
+  | 'corridor'
+  | 'window'
+  | 'brake'
+  | 'marsLanding'
+  | 'tripPlan'
+  | 'venus'
+  | 'sunward'
+  | 'belt'
+  | 'ion'
+  | 'sampleReturn';
 
 export interface Skill {
   id: SkillId;
@@ -144,5 +153,59 @@ export const SKILLS: Record<SkillId, Skill> = {
     emoji: '🎳',
     title: 'Come home at just the right angle',
     text: 'Too steep, and the capsule gets too hot and too squished. Too shallow, and it bounces off the air like a stone skipping on water. There’s a safe angle in between.',
+  },
+  window: {
+    id: 'window',
+    emoji: '📅',
+    title: 'Launch windows: go when the planets line up',
+    text: "The planets are always moving around the Sun. You aim for where the planet will be when you get there, not where it is now. The cheapest trips only line up every so often: every 19 months for Venus, every 26 months for Mars.",
+  },
+  brake: {
+    id: 'brake',
+    emoji: '🛑',
+    title: 'To stay, you have to brake',
+    text: "A probe arrives going really fast. With no brakes, it zooms right past. To stay in orbit, it fires its own engine at just the right moment to slow down, and the planet's gravity catches it.",
+  },
+  marsLanding: {
+    id: 'marsLanding',
+    emoji: '🪂',
+    title: 'Mars: heat shield, parachute, then rockets',
+    text: "Mars has air, so a heat shield is needed for the hot dive in. But the air is so thin that a parachute only slows you to about 300 km/h. Rockets have to do the last part. Perseverance used a sky crane to lower the rover on ropes.",
+  },
+  tripPlan: {
+    id: 'tripPlan',
+    emoji: '🗺️',
+    title: 'Every world needs its own lander',
+    text: "The Moon has no air, so landers use only rockets. Mars has a little air, so landers need a heat shield and a parachute too. Plan the whole trip: where to, when to go, and how to land when you get there.",
+  },
+  venus: {
+    id: 'venus',
+    emoji: '🥵',
+    title: 'Venus is hot and crushing',
+    text: "Venus is hotter than a pizza oven (465 °C), and its air presses down 90 times harder than Earth's. The best landers lasted about two hours before they cooked. Thick walls and lots of cooling buy more time.",
+  },
+  sunward: {
+    id: 'sunward',
+    emoji: '☀️',
+    title: 'Falling toward the Sun speeds you up',
+    text: "Heading in toward the Sun is like rolling downhill: you go faster and faster. To stop at Mercury you need a really big brake. The real MESSENGER probe used six planet flybys to slow down instead, a trick you'll learn later.",
+  },
+  belt: {
+    id: 'belt',
+    emoji: '🪨',
+    title: 'The asteroid belt is mostly empty',
+    text: "In films, asteroids are crowded together. Really, they are about a million kilometres apart. Probes fly through without dodging anything, so they don't need heavy armour.",
+  },
+  ion: {
+    id: 'ion',
+    emoji: '⚡',
+    title: 'Ion engines: gentle but tireless',
+    text: "An ion engine pushes about as hard as a sheet of paper resting on your hand. But it uses hardly any fuel, so it can push for years and get faster and faster. Dawn used one to visit Vesta, then Ceres.",
+  },
+  sampleReturn: {
+    id: 'sampleReturn',
+    emoji: '🧪',
+    title: 'Coming home takes fuel too',
+    text: "Going out is only half the trip. To bring a sample home you need just as much push again for the way back, and a little capsule with a heat shield to drop it through Earth's air.",
   },
 };

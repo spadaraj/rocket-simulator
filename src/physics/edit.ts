@@ -305,12 +305,23 @@ export function blankRocket(): RocketSpec {
   };
 }
 
-export type PayloadSlot = 'lander' | 'cargo' | 'service' | 'capsule' | 'fairing' | 'tower';
+export type PayloadSlot = 'kick' | 'lander' | 'cargo' | 'service' | 'capsule' | 'fairing' | 'tower';
 
 /** What can go in each payload slot, bottom of the payload to top. */
 export const PAYLOAD_SLOTS: { slot: PayloadSlot; label: string; roscoe: string; parts: string[] }[] = [
-  { slot: 'lander', label: 'Moon lander', roscoe: '🌕 Moon lander', parts: ['apollo-lm', 'spaceq-cargo-lander'] },
-  { slot: 'cargo', label: 'Cargo', roscoe: '📦 Cargo', parts: ['satellite-small', 'satellite-heavy', 'moon-base', 'starship-cargo'] },
+  { slot: 'kick', label: 'Braking stage', roscoe: '🛑 Braking stage', parts: ['spaceq-braking-stage'] },
+  {
+    slot: 'lander',
+    label: 'Lander',
+    roscoe: '🛬 Lander',
+    parts: ['apollo-lm', 'spaceq-cargo-lander', 'rover-chute', 'rover-skycrane', 'spaceq-mars-lander', 'venus-lander', 'spaceq-venus-lander'],
+  },
+  {
+    slot: 'cargo',
+    label: 'Cargo',
+    roscoe: '📦 Cargo',
+    parts: ['satellite-small', 'satellite-heavy', 'moon-base', 'starship-cargo', 'planet-probe', 'mars-orbiter', 'messenger-probe', 'ion-probe', 'sample-probe', 'armored-probe'],
+  },
   { slot: 'service', label: 'Service module', roscoe: '🔋 Service module', parts: ['apollo-sm', 'a139-service-module', 'orion-esm'] },
   { slot: 'capsule', label: 'Capsule', roscoe: '👩‍🚀 Capsule', parts: ['apollo-cm', 'a139-command-module', 'orion-cm', 'dragon-cargo'] },
   { slot: 'fairing', label: 'Nose fairing', roscoe: '🥚 Nose cover', parts: ['fairing-5m'] },

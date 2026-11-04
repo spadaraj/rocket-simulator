@@ -2389,3 +2389,30 @@ button.brand {
     font-size: 15px;
   }
 }
+
+/* Launch-window map in the Roscoe builder */
+.window-map-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 0 10px;
+  flex-wrap: wrap;
+}
+.window-map {
+  border-radius: 10px;
+  flex: none;
+}
+.window-push {
+  font-weight: 700;
+  font-size: 1.05rem;
+  max-width: 14em;
+}
+.window-push.good {
+  color: #2e8b4a;
+}
+.window-push.meh {
+  color: #b7791f;
+}
+.window-push.bad {
+  color: #c53030;
+}

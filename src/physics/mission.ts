@@ -2,6 +2,7 @@
 
 import { LAUNCH_SITES, OMEGA_EARTH_RADS } from './constants';
 import { moonLedger, type MoonLedger } from './moon';
+import { DESTINATIONS, planetLedger, type PlanetLedger } from './planets';
 import { GEO_ALTITUDE_M, goesToMoon, orbitRaise, type RaiseLedger } from './raise';
 import { simulateRecovery, type RecoveryTrack } from './recovery';
 import { simulateReentry, type ReentryRecord } from './reentry';
@@ -9,7 +10,7 @@ import { simulate, type SimOptions } from './simulate';
 import type { Catalog, FlightRecord, MissionFailureType, RocketSpec } from './types';
 import { buildVehicle } from './vehicle';
 
-export type StepId = 'ascent' | 'systems' | 'recovery' | 'raise' | 'moon' | 'reentry';
+export type StepId = 'ascent' | 'systems' | 'recovery' | 'raise' | 'moon' | 'planet' | 'reentry';
 
 export interface MissionStep {
   id: StepId;
@@ -30,6 +31,8 @@ export interface MissionRecord {
   moon?: MoonLedger;
   /** High-orbit missions: the two burns up from the parking orbit. */
   raise?: RaiseLedger;
+  /** Trips to the planets and the asteroid belt. */
+  planet?: PlanetLedger;
   reentry?: ReentryRecord;
   result: MissionResult;
   /** Ascent plus everything still falling back: how long the flight scene plays. */
@@ -39,7 +42,7 @@ export interface MissionRecord {
 /** Earlier steps win: a rocket that never reached orbit did not burn up coming home. */
 const ORDER: MissionFailureType[] = [
   'noLiftoff', 'breakup', 'tumble', 'engineFailure', 'outOfFuel', 'crash',
-  'orbitShort', 'moonShort', 'skipOut', 'burnUp', 'crewG', 'crashLanding',
+  'orbitShort', 'moonShort', 'planetShort', 'skipOut', 'burnUp', 'crewG', 'crashLanding',
 ];
 export const failureRank = (t: MissionFailureType) => ORDER.indexOf(t);
 
@@ -84,6 +87,37 @@ export function flyMission(spec: RocketSpec, catalog: Catalog, opts: SimOptions 
   let moon: MoonLedger | undefined;
   let raise: RaiseLedger | undefined;
   let reentry: ReentryRecord | undefined;
+  let planet: PlanetLedger | undefined;
+  if (o.success && spec.mission.target === 'planet') {
+    planet = planetLedger(spec, catalog, o.remainingDeltaVMS);
+    const short = planet.legs.find((l) => !l.ok);
+    const where = DESTINATIONS[planet.destination].name;
+    const unit = (l: { unit: string; neededMS: number; availableMS: number }) =>
+      l.unit === 'check' ? 'missing' : l.unit === 'min' ? `needs ${l.neededMS.toFixed(0)} min, lasted ${l.availableMS.toFixed(0)}` : `needs ${l.neededMS.toFixed(0)} m/s, has ${l.availableMS.toFixed(0)}`;
+    steps.push({
+      id: 'planet',
+      label: `Trip to ${where}`,
+      status: short ? 'fail' : 'ok',
+      note: short
+        ? `${short.name}: ${unit(short)}`
+        : `${{ flyby: 'Flew past', orbit: 'In orbit at', land: 'Landed on', sample: 'Brought home a sample from' }[planet.arrival]} ${where} after ${Math.round(planet.totalDays)} days`,
+    });
+    if (short && !failure)
+      failure = {
+        type: 'planetShort',
+        detail: {
+          leg: short.name,
+          legId: short.id,
+          by: short.by,
+          neededMS: short.neededMS,
+          availableMS: short.availableMS,
+          unit: short.unit,
+          destination: planet.destination,
+          offsetDays: planet.offsetDays,
+          windowDepartMS: planet.windowDepartMS,
+        },
+      };
+  }
   if (o.success && spec.mission.target === 'highOrbit') {
     const fromAlt = (o.orbit!.perigeeAltM + o.orbit!.apogeeAltM) / 2;
     raise = orbitRaise(fromAlt, spec.mission.highOrbitAltitudeM ?? GEO_ALTITUDE_M, o.remainingDeltaVMS);
@@ -121,7 +155,7 @@ export function flyMission(spec: RocketSpec, catalog: Catalog, opts: SimOptions 
       if (short && !failure)
         failure = { type: 'moonShort', detail: { leg: short.name, legId: short.id, by: short.by, neededMS: short.neededMS, availableMS: short.availableMS } };
     }
-    if (!moon || moon.success) {
+    if ((!moon || moon.success) && !planet) {
       reentry = simulateReentry(spec, catalog, toMoon) ?? undefined;
       if (reentry) {
         const ok = reentry.outcome === 'splashdown';
@@ -174,6 +208,7 @@ export function flyMission(spec: RocketSpec, catalog: Catalog, opts: SimOptions 
     recoveries,
     moon,
     raise,
+    planet,
     reentry,
     result: { success: !failure, failure, steps },
     flightDurationS: Math.max(ascent.durationS, lastRecovery),

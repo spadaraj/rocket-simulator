@@ -1,4 +1,5 @@
-// Mission Mode, Chapters 1–3: Launch School, Higher and Further, and the Moon.
+// Mission Mode, Chapters 1–5: Launch School, Higher and Further, the Moon, the inner planets
+// and the asteroid belt.
 // Each mission teaches one idea and unlocks the controls it needs. Some start with a
 // rocket that fails on purpose, so the failure card can teach the fix.
 
@@ -15,17 +16,19 @@ import {
   setTank,
 } from '../physics/edit';
 import type { MissionRecord } from '../physics/mission';
-import type { RocketSpec } from '../physics/types';
+import type { Arrival, Destination, RocketSpec } from '../physics/types';
 import type { Chapter, CheckContext, Mission } from './types';
 
 export const CHAPTERS: Chapter[] = [
   { n: 1, title: 'Launch School', rank: 'Cadet' },
   { n: 2, title: 'Higher and Further', rank: 'Pilot' },
   { n: 3, title: 'The Moon', rank: 'Commander' },
+  { n: 4, title: 'Inner Planets', rank: 'Moon Walker' },
+  { n: 5, title: 'The Asteroid Belt', rank: 'Planet Hunter' },
 ];
 
 /** Rank earned by finishing each chapter (the first is where you start). */
-export const RANKS = ['Cadet', 'Pilot', 'Commander', 'Moon Walker'];
+export const RANKS = ['Cadet', 'Pilot', 'Commander', 'Moon Walker', 'Planet Hunter', 'Deep Space Explorer'];
 
 // ---------- starting rockets ----------
 
@@ -50,6 +53,18 @@ function satTrainer(): RocketSpec {
   return setName(setPayloadSlot(setPayloadSlot(trainer(), 'capsule', null), 'cargo', 'satellite-small'), 'Space Q Sat Launcher');
 }
 
+/** Take everything off the top except the nose cover. */
+const clearTop = (s: RocketSpec) => (['kick', 'lander', 'cargo', 'service', 'capsule', 'tower'] as const).reduce((x, slot) => setPayloadSlot(x, slot, null), s);
+
+const trip = (s: RocketSpec, destination: Destination, arrival: Arrival, launchOffsetDays = 0) =>
+  setMission(s, { target: 'planet', destination, arrival, launchOffsetDays });
+
+/** The trainer as a probe launcher: a probe under the nose cover instead of the capsule. */
+const probeTrainer = (probe: string) => setName(setPayloadSlot(setPayloadSlot(clearTop(trainer()), 'cargo', probe), 'fairing', 'fairing-5m'), 'Space Q Probe Launcher');
+
+/** Falcon Heavy with something else under the nose cover. */
+const heavyWith = (slot: 'cargo' | 'lander', part: string) => setPayloadSlot(clearTop(preset('falcon-heavy')), slot, part);
+
 // ---------- checks ----------
 
 const orbit = (m: MissionRecord) => m.ascent.outcome.success;
@@ -64,6 +79,15 @@ const done = (c: CheckContext) => !c.m.result.failure;
 const moonOk = (m: MissionRecord) => !!m.moon?.success;
 const boostersSaved = (m: MissionRecord) => m.recoveries.some((r) => r.kind === 'boosters' && r.outcome === 'splashdown');
 /** Spare push left after the big burn toward the Moon. */
+const planetOk = (m: MissionRecord, dest: Destination, arrival?: Arrival) =>
+  !!m.planet?.success && m.planet.destination === dest && (!arrival || m.planet.arrival === arrival);
+/** Launched within two weeks of the best day. */
+const onTime = (m: MissionRecord) => Math.abs(m.planet?.offsetDays ?? 99) <= 14;
+const liftoffT = (m: MissionRecord) => m.ascent.summary.liftoffMassKg / 1000;
+const legSpare = (m: MissionRecord, id: string) => {
+  const l = m.planet?.legs.find((x) => x.id === id);
+  return l ? l.availableMS - l.neededMS : -Infinity;
+};
 const tliSpare = (m: MissionRecord) => {
   const tli = m.moon?.legs.find((l) => l.id === 'tli');
   return tli ? tli.availableMS - tli.neededMS : Infinity;
@@ -525,6 +549,263 @@ export const MISSIONS: Mission[] = [
     hintControl: 'lander',
     debrief: 'Space Q has a Moon base! Landing takes way more fuel than flying past: two big brakes, and no air to help.',
     solve: (s) => setPayloadSlot(s, 'lander', 'spaceq-cargo-lander'),
+  },
+
+  // ---------------- Chapter 4: Inner Planets ----------------
+  {
+    id: 'hello-venus',
+    chapter: 4,
+    kind: 'history',
+    title: 'Hello Venus',
+    real: 'Mariner 2, 1962: the first visit to another planet',
+    patch: '🟡',
+    briefing: [
+      'Welcome to Chapter 4, Moon Walker! Now we leave the Earth and the Moon behind.',
+      'In 1962, a little probe called Mariner 2 flew past Venus. It was the first visit to another planet!',
+      'Our probe is all set for Venus. But planets move… and the launch day is set six months late. Let’s see what happens.',
+    ],
+    goalText: 'Fly past Venus',
+    rocket: () => trip(probeTrainer('planet-probe'), 'venus', 'flyby', 180),
+    goal: (c) => planetOk(c.m, 'venus'),
+    stars: [
+      { text: 'Launch within 2 weeks of the best day 🎯', check: (c) => planetOk(c.m, 'venus') && onTime(c.m) },
+      { text: 'Just enough fuel: weigh less than 400 t at liftoff', check: (c) => planetOk(c.m, 'venus') && liftoffT(c.m) < 400 },
+    ],
+    unlocks: ['launchDay'],
+    skill: 'window',
+    coach: [{ say: 'Launch it! After orbit, watch the map. Where is Venus when the probe gets there?', point: 'launch', until: (c) => c.phase !== 'ready' }],
+    flightLines: { orbit: 'In orbit! Next, the top stage fires again to leave Earth for good.' },
+    hints: ['The top stage couldn’t push hard enough. Were Earth and Venus lined up?', 'In Build, change “Launch day” until it says 🎯 Best day.'],
+    hintControl: 'launchDay',
+    debrief: 'Hello Venus! You launched when the planets lined up, so the trip took the smallest push. That’s a launch window.',
+    solve: (s) => setMission(s, { launchOffsetDays: 0 }),
+  },
+  {
+    id: 'mars-orbiter',
+    chapter: 4,
+    kind: 'history',
+    title: 'Mars Orbiter',
+    real: 'Mars Reconnaissance Orbiter, 2005: still taking pictures of Mars today',
+    patch: '🔴',
+    briefing: [
+      'History sim! In 2005, NASA sent a big orbiter to Mars. It’s still up there, taking amazing pictures.',
+      'Flying past is easy. Staying is harder: you have to brake when you get there.',
+      'The Chief Engineer packed the little flyby probe again. Can it stay at Mars?',
+    ],
+    goalText: 'Get into orbit around Mars',
+    rocket: () => trip(probeTrainer('planet-probe'), 'mars', 'orbit'),
+    goal: (c) => planetOk(c.m, 'mars', 'orbit'),
+    stars: [
+      { text: 'Keep 700 m/s of braking fuel spare', check: (c) => planetOk(c.m, 'mars', 'orbit') && legSpare(c.m, 'capture') >= 700 },
+      { text: 'Win with Chaos Mode on 🎲', check: (c) => planetOk(c.m, 'mars', 'orbit') && c.stats.chaos },
+    ],
+    unlocks: ['arrive'],
+    skill: 'brake',
+    coach: [{ say: 'Launch it, then watch closely when the probe gets to Mars.', point: 'launch', until: (c) => c.phase !== 'ready' }],
+    flightLines: { orbit: 'Parked in Earth orbit. Next stop: Mars, about 8 months away!' },
+    hints: ['It zoomed right past Mars! What could slow it down?', 'In Build, pick the Mars orbiter in the Cargo row. It has its own engine.'],
+    hintControl: 'payload',
+    debrief: 'In orbit at Mars! The orbiter fired its engine at just the right moment, and Mars’s gravity caught it.',
+    solve: (s) => setPayloadSlot(s, 'cargo', 'mars-orbiter'),
+  },
+  {
+    id: 'rover-drop',
+    chapter: 4,
+    kind: 'history',
+    title: 'Rover Drop',
+    real: 'Perseverance, 2020: a rover lowered onto Mars by a sky crane',
+    patch: '🪂',
+    briefing: [
+      'History sim! Perseverance is a car-size rover driving around Mars right now.',
+      'Mars has air, so a big parachute should slow it down, just like our capsules at home… right?',
+      'Here’s a rover with only a parachute. Let’s try it.',
+    ],
+    goalText: 'Land a rover on Mars',
+    rocket: () => setName(trip(heavyWith('lander', 'rover-chute'), 'mars', 'land'), 'Falcon Heavy Mars Rover'),
+    goal: (c) => planetOk(c.m, 'mars', 'land') && !!payloadSlot(c.spec, 'lander')?.startsWith('rover'),
+    stars: [
+      { text: 'Bring the side boosters back with parachutes ♻️', check: (c) => planetOk(c.m, 'mars', 'land') && boostersSaved(c.m) },
+      { text: 'Win with Chaos Mode on 🎲', check: (c) => planetOk(c.m, 'mars', 'land') && c.stats.chaos },
+    ],
+    unlocks: ['rover'],
+    skill: 'marsLanding',
+    coach: [{ say: 'Launch it, and watch the landing at the very end.', point: 'launch', until: (c) => c.phase !== 'ready' }],
+    flightLines: { boosterSeparation: 'The two side boosters drop away!' },
+    hints: ['The parachute wasn’t enough. Mars air is very thin…', 'In Build, pick the rover with a sky crane in the Lander row.'],
+    hintControl: 'lander',
+    debrief: 'Touchdown! Heat shield, parachute, then rockets: and the sky crane lowered the rover gently on ropes.',
+    solve: (s) => setPayloadSlot(s, 'lander', 'rover-skycrane'),
+  },
+  {
+    id: 'mars-landing',
+    chapter: 4,
+    kind: 'spaceq',
+    title: 'Space Q Lands on Mars',
+    patch: '🛬',
+    briefing: [
+      'This is it: Space Q’s first landing on Mars! It’s a big step toward our dream of sending a crew there.',
+      'Your A1-39 still has the Moon cargo lander on top. You’ll plan this whole trip yourself.',
+      'Where to, what to do there, when to go, and how to land. Let’s go!',
+    ],
+    goalText: 'Land the Space Q Mars lander on Mars',
+    rocket: () => setName(setPayloadSlot(a139Cargo(), 'lander', 'spaceq-cargo-lander'), 'A1-39 Cargo'),
+    goal: (c) => planetOk(c.m, 'mars', 'land') && payloadSlot(c.spec, 'lander') === 'spaceq-mars-lander',
+    stars: [
+      { text: 'Launch within 2 weeks of the best day 🎯', check: (c) => planetOk(c.m, 'mars', 'land') && onTime(c.m) },
+      { text: 'Bring the Moon base along to Mars too 📦', check: (c) => planetOk(c.m, 'mars', 'land') && payloadSlot(c.spec, 'cargo') === 'moon-base' },
+    ],
+    unlocks: ['marsLander'],
+    skill: 'tripPlan',
+    coach: [
+      { say: 'Tap Build. Right now we’re set for the Moon.', point: 'tab:build', until: (c) => c.tab === 'build' },
+      { say: 'Change “Where to?” to Mars!', point: 'whereTo', until: (c) => c.spec.mission.target === 'planet' && c.spec.mission.destination === 'mars' },
+      { say: 'Now change “What to do there” to Land.', point: 'arrive', until: (c) => c.spec.mission.arrival === 'land' },
+      { say: 'Good! Now tap Fly and launch. Let’s see if the Moon lander can land on Mars.', point: 'tab:fly', until: (c) => c.tab === 'fly' },
+    ],
+    flightLines: { orbit: 'In orbit! Next, the big push toward Mars.' },
+    hints: ['It burned up in Mars’s air! The Moon lander has no heat shield.', 'In Build, pick the Space Q Mars lander in the Lander row.'],
+    hintControl: 'lander',
+    debrief: 'Space Q has landed on Mars! The Moon lander had no heat shield, because the Moon has no air. Every world needs its own kind of lander.',
+    solve: (s) => setMission(setPayloadSlot(s, 'lander', 'spaceq-mars-lander'), { target: 'planet', destination: 'mars', arrival: 'land', launchOffsetDays: 0 }),
+  },
+  {
+    id: 'hot-hot-hot',
+    chapter: 4,
+    kind: 'spaceq',
+    title: 'Hot Hot Hot',
+    patch: '🥵',
+    briefing: [
+      'The Mission Scientist wants pictures from the ground on Venus. Space Q will send a lander!',
+      'But Venus is hotter than a pizza oven, and its air would crush a submarine.',
+      'The Chief Engineer says our Mars rover will be fine. Will it? We need an hour of pictures.',
+    ],
+    goalText: 'Land on Venus and keep working for an hour',
+    rocket: () => setName(trip(heavyWith('lander', 'rover-skycrane'), 'venus', 'land'), 'Falcon Heavy Venus Lander'),
+    goal: (c) => planetOk(c.m, 'venus', 'land'),
+    stars: [
+      { text: 'Keep working for 4 hours', check: (c) => planetOk(c.m, 'venus', 'land') && (c.m.planet?.surfaceMinutes ?? 0) >= 240 },
+      { text: 'Win with Chaos Mode on 🎲', check: (c) => planetOk(c.m, 'venus', 'land') && c.stats.chaos },
+    ],
+    unlocks: [],
+    skill: 'venus',
+    coach: [{ say: 'Launch it, and keep an eye on the timer once it lands.', point: 'launch', until: (c) => c.phase !== 'ready' }],
+    flightLines: { orbit: 'In orbit! Venus is our closest neighbour: only about 5 months away.' },
+    hints: ['The rover cooked in two minutes! What’s built for Venus?', 'In Build, pick a Venus lander in the Lander row.'],
+    hintControl: 'lander',
+    debrief: 'Pictures from Venus! The real Venera 13 lasted just over two hours. A thick hull and lots of cooling buy more time.',
+    solve: (s) => setPayloadSlot(s, 'lander', 'venus-lander'),
+  },
+  {
+    id: 'closest-to-the-sun',
+    chapter: 4,
+    kind: 'history',
+    title: 'Closest to the Sun',
+    real: 'MESSENGER, 2004: the first probe to orbit Mercury',
+    patch: '☀️',
+    briefing: [
+      'History sim! Mercury is the closest planet to the Sun. MESSENGER was the first probe to orbit it.',
+      'Going toward the Sun sounds easy, like rolling downhill. But that’s the problem: you get faster and faster!',
+      'We’re borrowing NASA’s big SLS rocket. Can the probe stop at Mercury?',
+    ],
+    goalText: 'Get into orbit around Mercury',
+    rocket: () => setName(trip(setPayloadSlot(setPayloadSlot(clearTop(preset('sls')), 'cargo', 'messenger-probe'), 'fairing', 'fairing-5m'), 'mercury', 'orbit'), 'SLS Mercury Probe'),
+    goal: (c) => planetOk(c.m, 'mercury', 'orbit'),
+    stars: [
+      { text: 'Bring the boosters back with parachutes ♻️', check: (c) => planetOk(c.m, 'mercury', 'orbit') && boostersSaved(c.m) },
+      { text: 'Win with Chaos Mode on 🎲', check: (c) => planetOk(c.m, 'mercury', 'orbit') && c.stats.chaos },
+    ],
+    unlocks: ['kickStage'],
+    skill: 'sunward',
+    coach: [{ say: 'Launch it! Watch how fast the probe is going when it gets to Mercury.', point: 'launch', until: (c) => c.phase !== 'ready' }],
+    flightLines: { boosterSeparation: 'The boosters drop away!' },
+    hints: ['The probe was too fast to stop. Its own engine wasn’t enough.', 'In Build, add a Braking stage. It fires first to help slow down.'],
+    hintControl: 'kickStage',
+    debrief: 'In orbit at Mercury! You needed a huge brake. The real MESSENGER flew past Earth, Venus and Mercury six times to slow down instead. You’ll learn that trick later!',
+    solve: (s) => setPayloadSlot(s, 'kick', 'spaceq-braking-stage'),
+  },
+
+  // ---------------- Chapter 5: The Asteroid Belt ----------------
+  {
+    id: 'through-the-belt',
+    chapter: 5,
+    kind: 'spaceq',
+    title: 'Through the Belt',
+    patch: '🪨',
+    briefing: [
+      'Welcome to Chapter 5, Planet Hunter! Out past Mars is the asteroid belt: millions of space rocks.',
+      'The Chief Engineer is worried about crashing, so he wrapped our probe in thick armor.',
+      'Let’s fly it out through the belt and see how many rocks we hit.',
+    ],
+    goalText: 'Fly a probe out through the asteroid belt',
+    rocket: () => setName(trip(heavyWith('cargo', 'armored-probe'), 'belt', 'flyby'), 'Falcon Heavy Belt Probe'),
+    goal: (c) => planetOk(c.m, 'belt'),
+    stars: [
+      { text: 'Keep 2,000 m/s spare after leaving Earth', check: (c) => planetOk(c.m, 'belt') && legSpare(c.m, 'depart') >= 2000 },
+      { text: 'Bring the side boosters back with parachutes ♻️', check: (c) => planetOk(c.m, 'belt') && boostersSaved(c.m) },
+    ],
+    unlocks: [],
+    skill: 'belt',
+    coach: [{ say: 'Launch it and see how far it gets.', point: 'launch', until: (c) => c.phase !== 'ready' }],
+    flightLines: { orbit: 'In orbit. Now, can the top stage throw all that armor out to the belt?' },
+    hints: ['The armor was too heavy to throw out to the belt. Do we really need it?', 'In Build, swap the armored probe for the little planet probe in the Cargo row.'],
+    hintControl: 'payload',
+    debrief: 'Straight through, and not one rock! Asteroids are about a million kilometres apart. No armor needed.',
+    solve: (s) => setPayloadSlot(s, 'cargo', 'planet-probe'),
+  },
+  {
+    id: 'two-stops',
+    chapter: 5,
+    kind: 'history',
+    title: 'Two Stops',
+    real: 'Dawn, 2007: the first probe to orbit two different worlds',
+    patch: '⚡',
+    briefing: [
+      'History sim! Vesta and Ceres are the two biggest things in the asteroid belt.',
+      'The Dawn probe orbited Vesta, then left and flew on to orbit Ceres. Two stops in one trip!',
+      'Every stop means braking, then speeding up again. Will our Mars orbiter have enough fuel?',
+    ],
+    goalText: 'Orbit Vesta, then Ceres',
+    rocket: () => setName(trip(heavyWith('cargo', 'mars-orbiter'), 'vestaCeres', 'orbit'), 'Falcon Heavy Dawn'),
+    goal: (c) => planetOk(c.m, 'vestaCeres'),
+    stars: [
+      { text: 'Use a smaller rocket: under 1,000 t at liftoff', check: (c) => planetOk(c.m, 'vestaCeres') && liftoffT(c.m) < 1000 },
+      { text: 'Win with Chaos Mode on 🎲', check: (c) => planetOk(c.m, 'vestaCeres') && c.stats.chaos },
+    ],
+    unlocks: ['ion'],
+    skill: 'ion',
+    coach: [{ say: 'Launch it! Watch the list of burns. Which one runs out?', point: 'launch', until: (c) => c.phase !== 'ready' }],
+    flightLines: { orbit: 'In orbit. Next, a long trip out to the belt.' },
+    hints: ['The orbiter ran out of fuel braking at Vesta. Chemical rockets drink fuel fast.', 'In Build, pick the ion probe in the Cargo row.'],
+    hintControl: 'payload',
+    debrief: 'Two worlds in one trip! The ion engine pushed gently for years, using hardly any fuel. That’s how Dawn did it.',
+    solve: (s) => setPayloadSlot(s, 'cargo', 'ion-probe'),
+  },
+  {
+    id: 'space-rock-sample',
+    chapter: 5,
+    kind: 'spaceq',
+    title: 'Space Rock Sample',
+    patch: '🧪',
+    briefing: [
+      'The Mission Scientist has a big request: bring back a piece of a space rock!',
+      'Space rock Q-7 is a little asteroid in the belt. Touch it, grab some dust, and bring it home.',
+      'Our ion probe got to Vesta and Ceres. Can it get there and back?',
+    ],
+    goalText: 'Bring a sample home from space rock Q-7',
+    rocket: () => setName(trip(heavyWith('cargo', 'ion-probe'), 'rock', 'sample'), 'Falcon Heavy Sample Return'),
+    goal: (c) => planetOk(c.m, 'rock', 'sample'),
+    stars: [
+      { text: 'Bring the side boosters back with parachutes ♻️', check: (c) => planetOk(c.m, 'rock', 'sample') && boostersSaved(c.m) },
+      { text: 'Win with Chaos Mode on 🎲', check: (c) => planetOk(c.m, 'rock', 'sample') && c.stats.chaos },
+    ],
+    unlocks: [],
+    skill: 'sampleReturn',
+    coach: [{ say: 'Launch it! This one is a long trip. Watch the days count up.', point: 'launch', until: (c) => c.phase !== 'ready' }],
+    flightLines: { orbit: 'In orbit. Next stop: space rock Q-7!' },
+    hints: ['It got there, but couldn’t get home. Coming back takes as much push as going!', 'In Build, pick the Space Q sample-return probe in the Cargo row.'],
+    hintControl: 'payload',
+    debrief: 'Sample delivered! A piece of the belt is in the Space Q lab. Coming home took just as much push as going out.',
+    solve: (s) => setPayloadSlot(s, 'cargo', 'sample-probe'),
   },
 ];
 

@@ -47,7 +47,7 @@ interface CardProps {
   badge?: ReactNode;
 }
 
-const STEP_ICON: Record<MissionStep['id'], string> = { ascent: '🚀', systems: '🎧', recovery: '🪂', raise: '🛰️', moon: '🌕', reentry: '🔥' };
+const STEP_ICON: Record<MissionStep['id'], string> = { ascent: '🚀', systems: '🎧', recovery: '🪂', raise: '🛰️', moon: '🌕', planet: '🪐', reentry: '🔥' };
 const STATUS_ICON: Record<MissionStep['status'], string> = { ok: '✅', fail: '❌', warn: '⚠️', skipped: '➖' };
 
 function Steps({ steps, roscoe }: { steps: MissionStep[]; roscoe: boolean }) {
