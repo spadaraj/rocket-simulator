@@ -16,6 +16,10 @@ export type SkillId =
   | 'highOrbit'
   | 'design'
   | 'moonTrip'
+  | 'freeReturn'
+  | 'lander'
+  | 'lifeboat'
+  | 'cargo'
   | 'corridor';
 
 export interface Skill {
@@ -110,6 +114,30 @@ export const SKILLS: Record<SkillId, Skill> = {
     emoji: '🌕',
     title: 'The Moon needs a second big push',
     text: "Getting to space is only the start. Heading to the Moon takes another push of about 3,200 m/s, so the top stage must still have lots of fuel once it's in orbit.",
+  },
+  freeReturn: {
+    id: 'freeReturn',
+    emoji: '🔁',
+    title: 'The free return: a loop home',
+    text: "Aim just right, and the Moon's gravity swings you around its back side and throws you straight home, with no extra fuel. It's a figure-eight path, and it's a built-in way home if anything goes wrong.",
+  },
+  lander: {
+    id: 'lander',
+    emoji: '🌕',
+    title: 'Reaching the Moon is not landing on it',
+    text: "The big rocket throws you toward the Moon. To land, you must brake into Moon orbit, then brake again all the way down. There's no air for parachutes, so a lander brings its own rocket and fuel.",
+  },
+  lifeboat: {
+    id: 'lifeboat',
+    emoji: '🛟',
+    title: 'Always have a way home',
+    text: 'On Apollo 13, the service module broke on the way to the Moon. The crew moved into the lander and used it as a lifeboat, and the free return swung them around the Moon and home.',
+  },
+  cargo: {
+    id: 'cargo',
+    emoji: '📦',
+    title: 'Heavy cargo needs a heavy lander',
+    text: "A cargo lander has to brake twice: into Moon orbit, then down to the ground. The heavier the cargo, the more fuel that takes, and the bigger the rocket needed to throw it all to the Moon.",
   },
   corridor: {
     id: 'corridor',

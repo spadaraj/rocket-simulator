@@ -11,6 +11,7 @@ import {
   setFins,
   setHeatShield,
   setMission,
+  setPayloadSlot,
   setRecovery,
   setStructure,
   setTank,
@@ -284,6 +285,18 @@ export function fixCandidates(
 
     case 'orbitShort':
     case 'moonShort': {
+      // No lander (or no lifeboat): no amount of fuel helps. Bring one.
+      if (/^No (lander|lifeboat|ascent)/.test(String(detail.by ?? ''))) {
+        const crewed = spec.payload.parts.some((r) => (catalog[r.part] as { heatShield?: unknown } | undefined)?.heatShield);
+        out.push({
+          id: 'add-lander',
+          title: crewed ? 'Add the Apollo Lunar Module' : 'Add the Space Q cargo lander',
+          roscoe: crewed ? 'Bring a Moon lander' : 'Bring the cargo lander',
+          cost: 1,
+          apply: (s) => setPayloadSlot(s, 'lander', crewed ? 'apollo-lm' : 'spaceq-cargo-lander'),
+        });
+        break;
+      }
       const landing = spec.stages.findIndex((s) => s.recovery === 'propulsive');
       if (landing >= 0)
         out.push({

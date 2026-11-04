@@ -1,4 +1,4 @@
-// Mission Mode, Chapters 1–2: Launch School and Higher and Further.
+// Mission Mode, Chapters 1–3: Launch School, Higher and Further, and the Moon.
 // Each mission teaches one idea and unlocks the controls it needs. Some start with a
 // rocket that fails on purpose, so the failure card can teach the fix.
 
@@ -21,16 +21,28 @@ import type { Chapter, CheckContext, Mission } from './types';
 export const CHAPTERS: Chapter[] = [
   { n: 1, title: 'Launch School', rank: 'Cadet' },
   { n: 2, title: 'Higher and Further', rank: 'Pilot' },
+  { n: 3, title: 'The Moon', rank: 'Commander' },
 ];
 
 /** Rank earned by finishing each chapter (the first is where you start). */
-export const RANKS = ['Cadet', 'Pilot', 'Commander'];
+export const RANKS = ['Cadet', 'Pilot', 'Commander', 'Moon Walker'];
 
 // ---------- starting rockets ----------
 
 /** Space Q's two-stage trainer: three Raptors below, one Raptor Vacuum above, a capsule on top. */
 function trainer(): RocketSpec {
   return { ...setName(addStage(blankRocket(), catalog), 'Space Q Trainer'), id: 'trainer' };
+}
+
+const preset = (id: string): RocketSpec => structuredClone(presets.find((p) => p.id === id)!);
+
+/** Saturn V with the lander left at home. */
+const saturnNoLander = () => setPayloadSlot(preset('saturn-v'), 'lander', null);
+
+/** Roscoe's A1-39 as a cargo rocket: the Moon base on top, but nothing to land it with. */
+function a139Cargo(): RocketSpec {
+  const bare = (['lander', 'service', 'capsule', 'tower'] as const).reduce((s, slot) => setPayloadSlot(s, slot, null), preset('a1-39'));
+  return { ...setName(setPayloadSlot(bare, 'cargo', 'moon-base'), 'A1-39 Moon Base Delivery'), id: 'a1-39-cargo' };
 }
 
 /** The trainer carrying a little satellite instead of the capsule. */
@@ -49,6 +61,13 @@ const heatShare = (m: MissionRecord) =>
   m.reentry ? Math.max(m.reentry.peakHeatFluxWm2 / m.reentry.maxHeatFluxWm2, m.reentry.heatLoadJm2 / m.reentry.maxHeatLoadJm2) : 1;
 const engines = (spec: RocketSpec, i = 0) => spec.stages[i]?.parts.find((p) => catalog[p.part]?.type === 'liquidEngine')?.count ?? 0;
 const done = (c: CheckContext) => !c.m.result.failure;
+const moonOk = (m: MissionRecord) => !!m.moon?.success;
+const boostersSaved = (m: MissionRecord) => m.recoveries.some((r) => r.kind === 'boosters' && r.outcome === 'splashdown');
+/** Spare push left after the big burn toward the Moon. */
+const tliSpare = (m: MissionRecord) => {
+  const tli = m.moon?.legs.find((l) => l.id === 'tli');
+  return tli ? tli.availableMS - tli.neededMS : Infinity;
+};
 
 export const MISSIONS: Mission[] = [
   // ---------------- Chapter 1: Launch School ----------------
@@ -383,6 +402,129 @@ export const MISSIONS: Mission[] = [
     hintControl: 'addStage',
     debrief: 'Pilot exam passed! You designed a real orbital rocket. Next stop: the Moon.',
     solve: (s) => addStage(s, catalog),
+  },
+
+  // ---------------- Chapter 3: The Moon ----------------
+  {
+    id: 'around-the-moon',
+    chapter: 3,
+    kind: 'history',
+    title: 'Around the Moon',
+    real: 'Artemis II, 2026: four astronauts loop around the Moon',
+    patch: '🔁',
+    briefing: [
+      'Welcome to Chapter 3, Commander! Time to leave Earth behind.',
+      'This is NASA’s SLS rocket with the Orion capsule. It’s set to stop in space, but we’re going around the Moon!',
+      'And the Chief Engineer set it to come home steep. Coming back from the Moon is FAST, so pick the angle carefully.',
+    ],
+    goalText: 'Loop around the Moon and bring the crew home',
+    rocket: () => setMission(preset('sls'), { target: 'orbit', reentryAngleDeg: -7.5 }),
+    goal: (c) => moonOk(c.m) && crewHome(c.m),
+    stars: [
+      { text: 'Find the coolest way home: heat shield under 80%', check: (c) => moonOk(c.m) && crewHome(c.m) && heatShare(c.m) < 0.8 },
+      { text: 'Bring the boosters back with parachutes ♻️', check: (c) => moonOk(c.m) && crewHome(c.m) && boostersSaved(c.m) },
+    ],
+    unlocks: [],
+    skill: 'freeReturn',
+    coach: [
+      { say: 'Tap Build. “Where to?” says Space right now.', point: 'tab:build', until: (c) => c.tab === 'build' },
+      { say: 'Change “Where to?” to Around the Moon!', point: 'whereTo', until: (c) => c.spec.mission.target === 'moonFlyby' || c.spec.mission.target === 'moon' },
+      { say: 'Now tap Fly and launch. Watch for the big push toward the Moon!', point: 'tab:fly', until: (c) => c.tab === 'fly' },
+    ],
+    flightLines: {
+      boosterSeparation: 'The two side boosters drop off.',
+      orbit: 'In orbit! Next, the top stage fires again to throw Orion toward the Moon.',
+    },
+    hints: ['The crew only went to space. Where were we going?', 'In Build, set “Where to?” to Around the Moon.'],
+    hintControl: 'whereTo',
+    debrief: 'Around the Moon and home! The Moon’s gravity did the turning, with no extra fuel. That’s a free return.',
+    solve: (s) => setMission(s, { target: 'moonFlyby', reentryAngleDeg: undefined }),
+  },
+  {
+    id: 'moon-landing',
+    chapter: 3,
+    kind: 'history',
+    title: 'Land on the Moon',
+    real: 'Apollo 11, 1969: the first people on the Moon',
+    patch: '👣',
+    briefing: [
+      'The biggest history sim of all! In 1969, Neil Armstrong and Buzz Aldrin landed on the Moon.',
+      'Here’s their rocket, the mighty Saturn V. But wait… someone forgot to pack the lander!',
+      'Launch it and see how far it gets. Then let’s fix it.',
+    ],
+    goalText: 'Land on the Moon and bring the crew home',
+    rocket: () => setName(saturnNoLander(), 'Saturn V (no lander)'),
+    goal: (c) => moonOk(c.m) && c.m.moon?.trip === 'land' && !c.m.moon.oneWay && crewHome(c.m),
+    stars: [
+      { text: 'Just enough fuel: less than 400 m/s spare after the Moon push', check: (c) => done(c) && c.m.moon?.trip === 'land' && tliSpare(c.m) < 400 },
+      { text: 'Win with Chaos Mode on 🎲', check: (c) => done(c) && c.m.moon?.trip === 'land' && c.stats.chaos },
+    ],
+    unlocks: ['lander'],
+    skill: 'lander',
+    coach: [{ say: 'Launch it! Watch the list of Moon burns. Which one goes wrong?', point: 'launch', until: (c) => c.phase !== 'ready' }],
+    flightLines: {
+      staging: 'Stage separation! The Saturn V has three stages.',
+      orbit: 'Parked in orbit. Next, the top stage fires again, toward the Moon!',
+    },
+    hints: ['It got to the Moon but couldn’t land. What lands on the Moon?', 'In Build, under “On top”, pick the Apollo lander in the Moon lander row.'],
+    hintControl: 'lander',
+    debrief: 'The Eagle has landed! The lander’s bottom half brakes all the way down, and its top half blasts the crew back up.',
+    solve: (s) => setPayloadSlot(s, 'lander', 'apollo-lm'),
+  },
+  {
+    id: 'apollo-13',
+    chapter: 3,
+    kind: 'history',
+    title: 'Get Them Home',
+    real: 'Apollo 13, 1970: the successful failure',
+    patch: '🛟',
+    briefing: [
+      'History sim! On the way to the Moon, Apollo 13’s oxygen tank exploded and broke the service module.',
+      'This time we’re only flying around the Moon, so the Chief Engineer left the lander at home to save weight.',
+      'But the same thing is going to break. Can you get the crew home anyway?',
+    ],
+    goalText: 'Bring the crew home after the service module breaks',
+    rocket: () => setName(setMission(saturnNoLander(), { target: 'moonFlyby' }), 'Apollo 13'),
+    faults: [{ kind: 'serviceModule' }],
+    goal: (c) => moonOk(c.m) && crewHome(c.m),
+    stars: [
+      { text: 'Fly it as a landing mission, like the real Apollo 13', check: (c) => moonOk(c.m) && crewHome(c.m) && c.spec.mission.target === 'moon' },
+      { text: 'Win with Chaos Mode on 🎲', check: (c) => moonOk(c.m) && crewHome(c.m) && c.stats.chaos },
+    ],
+    unlocks: [],
+    skill: 'lifeboat',
+    coach: [{ say: 'Launch it, and watch what happens on the way to the Moon.', point: 'launch', until: (c) => c.phase !== 'ready' }],
+    flightLines: { orbit: 'In orbit. Everything looks good… for now.' },
+    hints: ['The service module broke, and there was nowhere else for the crew to go.', 'Put the Apollo lander back on. It can be a lifeboat!'],
+    hintControl: 'lander',
+    debrief: 'Crew safe! The real Apollo 13 crew lived in their lander for four days, and the free return brought them home.',
+    solve: (s) => setPayloadSlot(s, 'lander', 'apollo-lm'),
+  },
+  {
+    id: 'moon-base',
+    chapter: 3,
+    kind: 'spaceq',
+    title: 'Moon Base Delivery',
+    patch: '🏗️',
+    briefing: [
+      'Big day for Space Q! We’re building a Moon base, and the first piece is ready.',
+      'It’s riding on your very own A1-39. But reaching the Moon isn’t the same as landing on it…',
+      'Get the base down on the Moon in one piece. No crew this time: the lander stays there.',
+    ],
+    goalText: 'Land the Moon base on the Moon',
+    rocket: a139Cargo,
+    goal: (c) => moonOk(c.m) && !!c.m.moon?.oneWay && payloadSlot(c.spec, 'cargo') === 'moon-base',
+    stars: [
+      { text: 'Protect the base with a nose cover', check: (c) => moonOk(c.m) && !!c.m.moon?.oneWay && !!payloadSlot(c.spec, 'fairing') },
+      { text: 'Weigh less than 6,000 t at liftoff', check: (c) => moonOk(c.m) && !!c.m.moon?.oneWay && c.m.ascent.summary.liftoffMassKg < 6000e3 },
+    ],
+    unlocks: [],
+    skill: 'cargo',
+    flightLines: { orbit: 'Base in orbit! Now for the long trip to the Moon.' },
+    hints: ['The base got to the Moon, but nothing could land it. What brakes and touches down?', 'In Build, pick the Space Q cargo lander in the Moon lander row.'],
+    hintControl: 'lander',
+    debrief: 'Space Q has a Moon base! Landing takes way more fuel than flying past: two big brakes, and no air to help.',
+    solve: (s) => setPayloadSlot(s, 'lander', 'spaceq-cargo-lander'),
   },
 ];
 

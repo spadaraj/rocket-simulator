@@ -78,6 +78,8 @@ const TARGETS: { id: RocketSpec['mission']['target']; label: string }[] = [
 /** Short names for payload modules. */
 const MODULE_NAMES: Record<string, string> = {
   'apollo-lm': 'Apollo lander',
+  'spaceq-cargo-lander': 'Space Q cargo lander',
+  'moon-base': 'Moon base',
   'satellite-small': 'Little satellite',
   'satellite-heavy': 'Big satellite',
   'starship-cargo': '100 t of cargo',
@@ -225,7 +227,7 @@ export function RoscoeBuilder(p: Props) {
   const order = spec.stages.map((_, i) => i).reverse();
   const can = (id: ControlId) => !p.controls || p.controls.has(id);
   const fresh = (id: ControlId) => (p.fresh?.has(id) ? ' fresh' : '');
-  const showPayloadCard = (['scratch', 'whereTo', 'targetHeight', 'payload', 'heatShield', 'comeHome'] as ControlId[]).some(can);
+  const showPayloadCard = (['scratch', 'whereTo', 'targetHeight', 'payload', 'lander', 'heatShield', 'comeHome'] as ControlId[]).some(can);
   const baseAngle = DEFAULT_ENTRY_ANGLE_DEG[goesToMoon(spec.mission.target) ? 'moon' : 'orbit'];
   const angle = spec.mission.reentryAngleDeg ?? baseAngle;
   const angleChoice = ANGLES.reduce((a, b) => (Math.abs(baseAngle + b.offset - angle) < Math.abs(baseAngle + a.offset - angle) ? b : a));
@@ -274,7 +276,7 @@ export function RoscoeBuilder(p: Props) {
             return (
               <Chooser
                 key={slot.slot}
-                id="payload"
+                id={slot.slot === 'lander' ? 'lander' : 'payload'}
                 label={slot.roscoe}
                 value={current ? MODULE_NAMES[current] ?? resolveCatalog(spec, catalog)[current]?.name ?? current : 'None'}
                 onPrev={() => setSpec(setPayloadSlot(spec, slot.slot, cycle(options, current, -1)))}

@@ -96,7 +96,7 @@ export function MissionMap({ progress, onPlay, onHome }: { progress: Progress; o
           </div>
         </section>
       ))}
-      <p className="sq-coming">🌕 More chapters coming: the Moon, Mars, the asteroid belt, the giant planets and Pluto!</p>
+      <p className="sq-coming">🪐 More chapters coming: Mars, the asteroid belt, the giant planets and Pluto!</p>
     </div>
   );
 }

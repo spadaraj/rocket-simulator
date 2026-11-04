@@ -679,7 +679,7 @@ export default function App() {
               <MoonLeg
                 ledger={mission.moon}
                 parkingAltM={spec.mission.targetOrbitAltitudeM}
-                kind={spec.mission.target === 'moonFlyby' ? 'flyby' : 'land'}
+                kind={mission.moon.trip}
                 roscoe={roscoe}
                 sceneSeconds={roscoe ? 18 : 12}
                 onDone={phase === 'moon' ? afterMoon : () => {}}

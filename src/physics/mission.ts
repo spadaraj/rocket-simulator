@@ -102,7 +102,7 @@ export function flyMission(spec: RocketSpec, catalog: Catalog, opts: SimOptions 
   if (o.success) {
     const toMoon = goesToMoon(spec.mission.target);
     if (toMoon) {
-      moon = moonLedger(spec, catalog, o.remainingDeltaVMS);
+      moon = moonLedger(spec, catalog, o.remainingDeltaVMS, opts.faults ?? []);
       const short = moon.legs.find((l) => !l.ok);
       steps.push({
         id: 'moon',
@@ -110,12 +110,16 @@ export function flyMission(spec: RocketSpec, catalog: Catalog, opts: SimOptions 
         status: short ? 'fail' : 'ok',
         note: short
           ? `${short.name}: needs ${short.neededMS.toFixed(0)} m/s, has ${short.availableMS.toFixed(0)}`
-          : spec.mission.target === 'moonFlyby'
-            ? 'Looped around the Moon and came back'
-            : 'Landed on the Moon and came back',
+          : moon.emergency
+            ? 'Service module broke! The lander lifeboat brought the crew around the Moon and home'
+            : moon.oneWay
+              ? 'Landed the cargo on the Moon'
+              : moon.trip === 'flyby'
+                ? 'Looped around the Moon and came back'
+                : 'Landed on the Moon and came back',
       });
       if (short && !failure)
-        failure = { type: 'moonShort', detail: { leg: short.name, by: short.by, neededMS: short.neededMS, availableMS: short.availableMS } };
+        failure = { type: 'moonShort', detail: { leg: short.name, legId: short.id, by: short.by, neededMS: short.neededMS, availableMS: short.availableMS } };
     }
     if (!moon || moon.success) {
       reentry = simulateReentry(spec, catalog, toMoon) ?? undefined;

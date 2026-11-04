@@ -309,8 +309,8 @@ export type PayloadSlot = 'lander' | 'cargo' | 'service' | 'capsule' | 'fairing'
 
 /** What can go in each payload slot, bottom of the payload to top. */
 export const PAYLOAD_SLOTS: { slot: PayloadSlot; label: string; roscoe: string; parts: string[] }[] = [
-  { slot: 'lander', label: 'Moon lander', roscoe: '🌕 Moon lander', parts: ['apollo-lm'] },
-  { slot: 'cargo', label: 'Cargo', roscoe: '📦 Cargo', parts: ['satellite-small', 'satellite-heavy', 'starship-cargo'] },
+  { slot: 'lander', label: 'Moon lander', roscoe: '🌕 Moon lander', parts: ['apollo-lm', 'spaceq-cargo-lander'] },
+  { slot: 'cargo', label: 'Cargo', roscoe: '📦 Cargo', parts: ['satellite-small', 'satellite-heavy', 'moon-base', 'starship-cargo'] },
   { slot: 'service', label: 'Service module', roscoe: '🔋 Service module', parts: ['apollo-sm', 'a139-service-module', 'orion-esm'] },
   { slot: 'capsule', label: 'Capsule', roscoe: '👩‍🚀 Capsule', parts: ['apollo-cm', 'a139-command-module', 'orion-cm', 'dragon-cargo'] },
   { slot: 'fairing', label: 'Nose fairing', roscoe: '🥚 Nose cover', parts: ['fairing-5m'] },

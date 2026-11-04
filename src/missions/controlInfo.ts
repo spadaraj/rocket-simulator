@@ -33,6 +33,7 @@ export const CONTROL_INFO: Record<ControlId, ControlInfo> = {
   chaos: { label: 'Chaos Mode', tab: 'fly', explain: 'Something random goes wrong on each flight. Can your rocket handle it?' },
   targetHeight: { label: 'How high', tab: 'build', explain: 'Pick how high your orbit should be.' },
   whereTo: { label: 'Where to?', tab: 'build', explain: 'Pick where the rocket is going: space, a high orbit, around the Moon or onto the Moon.' },
+  lander: { label: 'Moon lander', tab: 'build', explain: 'A lander carries its own fuel to slow down and touch down on the Moon. Rockets can only reach the Moon; a lander gets you onto it.' },
   tinker: { label: 'Push and Fuel saving', tab: 'build', explain: 'Invent your own engine! But be careful: some numbers are science fiction.' },
   scratch: { label: 'Name and save', tab: 'build', explain: 'Give your rocket a name and save it to fly again later.' },
 };

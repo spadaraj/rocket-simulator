@@ -433,7 +433,7 @@ This weekend's goal: Roscoe presses Launch on a rough A1-39 and watches it fly t
   - **Space Q look:** home screen (Missions / Sandbox), Space Q logo and colours, and the cartoon Roscoe.
   - **Story and coaching:** Flight Director Did and the story lines, controls that unlock as he learns, hints that get stronger, and the Skill Book.
   - **The missions:** the mission framework, stars and saved progress; Chapters 1–2, including burns in orbit.
-- [ ] 5b: Chapter 3, the Moon
+- [x] 5b: Chapter 3, the Moon: four missions, the Moon lander control, one-way cargo landers, the Apollo 13 lifeboat fault, and burn-by-burn Moon failure cards
 - [ ] 5c: Solar system map, transfers and launch windows; Chapters 4–5 (Mars landing, asteroid belt, Ceres)
 - [ ] 5d: Gravity assists, the outer planets, dwarf planets; Chapters 6–7 and the finale
 

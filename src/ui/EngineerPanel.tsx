@@ -34,6 +34,8 @@ function describeFault(f: Fault, vehicle: Vehicle): string {
       return `Top-stage leak in orbit: ${Math.round(f.fraction * 100)}% of what's left`;
     case 'glitch':
       return `${f.system[0].toUpperCase()}${f.system.slice(1)} glitch during the systems check`;
+    case 'serviceModule':
+      return 'Service module failure on the way to the Moon (Apollo 13)';
   }
 }
 

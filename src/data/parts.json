@@ -702,6 +702,31 @@
     "notes": "Rides inside the fairing, so it is not drawn."
   },
   {
+    "id": "moon-base",
+    "type": "payload",
+    "name": "Moon base module",
+    "massKg": 8000,
+    "confidence": "estimate",
+    "source": "Space Q design: a small habitat module, about the mass of an ISS node module's contents and structure scaled down.",
+    "notes": "Rides on the cargo lander, so it is not drawn separately."
+  },
+  {
+    "id": "spaceq-cargo-lander",
+    "type": "payload",
+    "name": "Space Q cargo lander",
+    "shape": "lander",
+    "massKg": 30000,
+    "source": "Space Q design: a one-way methane lander that brakes into Moon orbit and lands its cargo. Sized like the Apollo descent stage scaled up, with a methalox engine.",
+    "confidence": "estimate",
+    "notes": "Fuelled mass. No ascent stage: it stays on the Moon with the cargo.",
+    "lander": {
+      "descentPropellantKg": 23000,
+      "ascentPropellantKg": 0,
+      "ascentDryKg": 0,
+      "ispS": 345
+    }
+  },
+  {
     "id": "rs-25-shuttle",
     "type": "liquidEngine",
     "name": "RS-25 (Shuttle main engine, 104.5%)",

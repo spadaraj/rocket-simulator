@@ -72,17 +72,19 @@ export function MoonLeg({ ledger, parkingAltM, kind, roscoe, sceneSeconds = 16, 
     const reached = trip.outcome === 'home';
     const out: Beat[] = [{ kind: 'out', share: reached ? 0.4 : 1, legs: ['tli'] }];
     if (!reached || short === 'tli') return out;
+    // Apollo 13: the service module breaks on the way; the lander lifeboat steers them home.
+    if (ledger.emergency) return short === 'lifeboat' ? out : [...out, { kind: 'home', share: 0.45, legs: ['lifeboat'] }];
     if (kind === 'flyby') return [...out, { kind: 'home', share: 0.45, legs: ['flyby'] }];
     // Couldn't brake: the free return carries it round the Moon and home, like Apollo 13.
     if (short === 'loi') return [...out, { kind: 'home', share: 0.45, legs: ['loi'] }];
     out.push({ kind: 'stay', share: 0.08, legs: ['loi'] });
     out.push({ kind: 'stay', share: 0.08, legs: ['descent'] });
-    if (short === 'descent') return out;
+    if (short === 'descent' || ledger.oneWay) return out;
     out.push({ kind: 'stay', share: 0.08, legs: ['ascent'] });
     if (short === 'ascent') return out;
     out.push({ kind: 'home', share: 0.4, legs: ['tei'] });
     return out;
-  }, [trip, short, kind]);
+  }, [trip, short, kind, ledger]);
   const total = beats.reduce((a, b) => a + b.share, 0);
 
   const [p, setP] = useState(0); // 0–1 through the scene
@@ -159,6 +161,14 @@ export function MoonLeg({ ledger, parkingAltM, kind, roscoe, sceneSeconds = 16, 
         : roscoe
           ? 'Not enough push! It fell back to Earth 😟'
           : `TLI ${trip.burnMadeMS.toFixed(0)} of ${trip.burnNeededMS.toFixed(0)} m/s: apogee ${Math.round(trip.apogeeAltM / 1000).toLocaleString()} km, then back down`;
+    if (ledger.emergency && beat.kind === 'out' && f > 0.55 && !failedHere)
+      return roscoe ? '💥 Bang! The service module broke!' : 'Service module failure: landing called off';
+    if (ledger.emergency && failedHere) return roscoe ? 'No lifeboat! Nobody can steer home 😟' : 'Service module lost and no lander to use as a lifeboat';
+    if (ledger.emergency && beat.kind === 'home' && f < 0.85)
+      return roscoe ? 'The lander is the lifeboat! Looping around the Moon and home' : `Lifeboat burns on the lander's engine (${legs[1]?.availableMS.toFixed(0)} m/s available)`;
+    if (ledger.oneWay && endOfStory && !short) return roscoe ? 'Delivered! The base is on the Moon 📦' : 'Cargo landed; the lander stays on the Moon';
+    if (failedHere && legs[stopAt].by.startsWith('No '))
+      return roscoe ? (legs[stopAt].id === 'ascent' ? 'No way to take off again! 😟' : 'No lander! Nothing to land with 😟') : `${legs[stopAt].name}: ${legs[stopAt].by.toLowerCase()}`;
     if (failedHere) return roscoe ? 'Not enough fuel! 😟' : `${legs[stopAt].name}: short by ${(legs[stopAt].neededMS - legs[stopAt].availableMS).toFixed(0)} m/s`;
     if (short === 'loi' && beat.kind === 'home')
       return roscoe ? "Couldn't slow down, so it swung around the Moon and home!" : 'No LOI: the free return brings it straight home (like Apollo 13)';

@@ -233,7 +233,10 @@ export type Fault =
   /** The top stage loses part of its leftover propellant while coasting in orbit. */
   | { kind: 'leak'; fraction: number }
   /** A system flags red at its check, then mission control resets it. */
-  | { kind: 'glitch'; system: 'power' | 'guidance' | 'comms' };
+  | { kind: 'glitch'; system: 'power' | 'guidance' | 'comms' }
+  /** Apollo 13: on the way to the Moon the service module breaks. The landing is off, and
+   *  the lander becomes a lifeboat that steers the crew around the Moon and home. */
+  | { kind: 'serviceModule' };
 
 export interface ChecklistItem {
   system: SystemName;

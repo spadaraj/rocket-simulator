@@ -136,18 +136,57 @@ export function lessonFor(m: MissionRecord, spec: RocketSpec): Lesson | undefine
         ],
         skill: 'highOrbit',
       };
-    case 'moonShort':
+    case 'moonShort': {
+      const meter: Meter = { emoji: '⛽', label: 'Push left', value: num(d.availableMS), limit: num(d.neededMS), unit: 'm/s', want: 'above', limitLabel: 'needed' };
+      const by = String(d.by ?? '');
+      if (d.legId === 'lifeboat')
+        return {
+          what: 'On the way to the Moon, the service module broke, and there was no lifeboat!',
+          why: [
+            'The service module had the engine and the air. Without it, the crew needed somewhere else to live and an engine to steer.',
+            'On Apollo 13, the Moon lander was the lifeboat. This time it was left at home.',
+          ],
+          fixes: [{ text: 'Bring a Moon lander, even if you are not landing.', control: 'lander' }],
+          skill: 'lifeboat',
+        };
+      if (by.startsWith('No lander') || by.startsWith('No ascent'))
+        return {
+          what: by.startsWith('No ascent') ? 'It landed, but the lander had no way to take off again!' : 'It got to the Moon, but there was nothing to land with!',
+          why: by.startsWith('No ascent')
+            ? ['A cargo lander is one-way: it lands and stays.', 'Astronauts need a lander with a second little rocket on top to blast back up.']
+            : [
+                'The big rocket can only throw you toward the Moon. Slowing down to land takes another rocket.',
+                'A lander carries its own fuel to brake and touch down gently. There is no air on the Moon for parachutes!',
+              ],
+          fixes: [{ text: by.startsWith('No ascent') ? 'Pick the Apollo lander for astronauts.' : 'Add a Moon lander.', control: 'lander' }],
+          skill: 'lander',
+        };
+      if (d.legId === 'tli')
+        return {
+          what: "It reached space, but didn't have enough fuel for the big push toward the Moon.",
+          why: ['Heading to the Moon takes another huge push after reaching space.', `${d.by} needed more fuel than it had.`],
+          meter,
+          fixes: [
+            { text: 'Give the top stage a bigger tank.', control: 'tank' },
+            { text: "Don't save fuel for landing the bottom stage.", control: 'landIt' },
+            { text: 'Let "Make it reach the Moon" pick the fuel.', control: 'autoSize' },
+          ],
+          skill: 'moonTrip',
+        };
       return {
-        what: `It reached space, but didn't have enough fuel for the Moon (${String(d.leg).toLowerCase()}).`,
-        why: ['Heading to the Moon takes another huge push after reaching space.', `${d.by} needed more fuel than it had.`],
-        meter: { emoji: '⛽', label: 'Push left', value: num(d.availableMS), limit: num(d.neededMS), unit: 'm/s', want: 'above', limitLabel: 'needed' },
-        fixes: [
-          { text: 'Give the top stage a bigger tank.', control: 'tank' },
-          { text: "Don't save fuel for landing the bottom stage.", control: 'landIt' },
-          { text: 'Let "Make it reach the Moon" pick the fuel.', control: 'autoSize' },
+        what: `It got to the Moon, but ${d.by} ran short (${String(d.leg).toLowerCase()}).`,
+        why: [
+          'Every burn at the Moon is paid for by the spacecraft itself, not the big rocket.',
+          'The heavier the spacecraft, the more fuel each burn takes.',
         ],
-        skill: 'moonTrip',
+        meter,
+        fixes: [
+          { text: 'Try a different service module or lander.', control: 'lander' },
+          { text: 'Carry less on top.', control: 'payload' },
+        ],
+        skill: 'lander',
       };
+    }
     case 'burnUp':
       return {
         what: 'Coming home, the capsule got too hot for its heat shield.',

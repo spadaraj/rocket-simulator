@@ -24,13 +24,14 @@ export type ControlId =
   | 'chaos'
   | 'targetHeight'
   | 'whereTo'
+  | 'lander' // the Moon lander slot
   | 'tinker' // invent an engine
   | 'scratch'; // start from scratch, name and save
 
 export const ALL_CONTROLS: ControlId[] = [
   'speed', 'build', 'engines', 'engineType', 'tank', 'autoSize', 'stageStrip', 'addStage', 'payload', 'heatShield',
   'comeHome', 'fins', 'easeOff', 'stronger', 'airPush', 'landIt', 'landingFuel', 'boosters', 'boosterChutes', 'chaos',
-  'targetHeight', 'whereTo', 'tinker', 'scratch',
+  'targetHeight', 'whereTo', 'lander', 'tinker', 'scratch',
 ];
 
 /** Which control a fix changes, from its id. */
@@ -49,6 +50,7 @@ export function fixControl(fixId: string): ControlId | undefined {
     [/^entry-/, 'comeHome'],
     [/^shield/, 'heatShield'],
     [/^reserve-/, 'landingFuel'],
+    [/^add-lander/, 'lander'],
   ];
   return rules.find(([re]) => re.test(fixId))?.[1];
 }
