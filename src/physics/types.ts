@@ -128,8 +128,13 @@ export interface StageSpec {
 }
 
 export interface MissionSpec {
-  /** moonFlyby: loop around the Moon and come straight home, no landing (Artemis II). */
-  target: 'orbit' | 'moon' | 'moonFlyby';
+  /**
+   * moonFlyby: loop around the Moon and come straight home, no landing (Artemis II).
+   * highOrbit: reach the parking orbit, then two burns up to highOrbitAltitudeM.
+   */
+  target: 'orbit' | 'moon' | 'moonFlyby' | 'highOrbit';
+  /** highOrbit target: final circular orbit height (geostationary: 35,786 km). */
+  highOrbitAltitudeM?: number;
   targetOrbitAltitudeM: number;
   pitchKick: { timeS: number; angleDeg: number };
   /** Throttle liquid engines down while dynamic pressure is above a threshold. */
@@ -152,6 +157,8 @@ export interface RocketSpec {
   mission: MissionSpec;
   /** Parts designed for this rocket (free-design tanks), layered over the catalog. */
   customParts?: Part[];
+  /** Stronger structure: every part's strength limit × this, at the cost of extra dry mass (1 = standard). */
+  structureScale?: number;
   notes?: string[];
 }
 
@@ -214,7 +221,7 @@ export interface FlightEvent {
 /** Ascent failures. */
 export type FailureType = 'noLiftoff' | 'outOfFuel' | 'breakup' | 'crash' | 'tumble' | 'engineFailure';
 /** Everything that can go wrong on the whole mission. */
-export type MissionFailureType = FailureType | 'moonShort' | 'burnUp' | 'skipOut' | 'crewG' | 'crashLanding';
+export type MissionFailureType = FailureType | 'orbitShort' | 'moonShort' | 'burnUp' | 'skipOut' | 'crewG' | 'crashLanding';
 
 // ---------- Chaos Mode ----------
 

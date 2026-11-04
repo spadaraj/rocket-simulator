@@ -2,13 +2,14 @@
 
 import { LAUNCH_SITES, OMEGA_EARTH_RADS } from './constants';
 import { moonLedger, type MoonLedger } from './moon';
+import { GEO_ALTITUDE_M, goesToMoon, orbitRaise, type RaiseLedger } from './raise';
 import { simulateRecovery, type RecoveryTrack } from './recovery';
 import { simulateReentry, type ReentryRecord } from './reentry';
 import { simulate, type SimOptions } from './simulate';
 import type { Catalog, FlightRecord, MissionFailureType, RocketSpec } from './types';
 import { buildVehicle } from './vehicle';
 
-export type StepId = 'ascent' | 'systems' | 'recovery' | 'moon' | 'reentry';
+export type StepId = 'ascent' | 'systems' | 'recovery' | 'raise' | 'moon' | 'reentry';
 
 export interface MissionStep {
   id: StepId;
@@ -27,6 +28,8 @@ export interface MissionRecord {
   ascent: FlightRecord;
   recoveries: RecoveryTrack[];
   moon?: MoonLedger;
+  /** High-orbit missions: the two burns up from the parking orbit. */
+  raise?: RaiseLedger;
   reentry?: ReentryRecord;
   result: MissionResult;
   /** Ascent plus everything still falling back: how long the flight scene plays. */
@@ -36,7 +39,7 @@ export interface MissionRecord {
 /** Earlier steps win: a rocket that never reached orbit did not burn up coming home. */
 const ORDER: MissionFailureType[] = [
   'noLiftoff', 'breakup', 'tumble', 'engineFailure', 'outOfFuel', 'crash',
-  'moonShort', 'skipOut', 'burnUp', 'crewG', 'crashLanding',
+  'orbitShort', 'moonShort', 'skipOut', 'burnUp', 'crewG', 'crashLanding',
 ];
 export const failureRank = (t: MissionFailureType) => ORDER.indexOf(t);
 
@@ -79,9 +82,25 @@ export function flyMission(spec: RocketSpec, catalog: Catalog, opts: SimOptions 
   }
 
   let moon: MoonLedger | undefined;
+  let raise: RaiseLedger | undefined;
   let reentry: ReentryRecord | undefined;
+  if (o.success && spec.mission.target === 'highOrbit') {
+    const fromAlt = (o.orbit!.perigeeAltM + o.orbit!.apogeeAltM) / 2;
+    raise = orbitRaise(fromAlt, spec.mission.highOrbitAltitudeM ?? GEO_ALTITUDE_M, o.remainingDeltaVMS);
+    const short = raise.legs.find((l) => !l.ok);
+    steps.push({
+      id: 'raise',
+      label: 'Climb to high orbit',
+      status: short ? 'fail' : 'ok',
+      note: short
+        ? `${short.name}: needs ${short.neededMS.toFixed(0)} m/s, has ${short.availableMS.toFixed(0)}`
+        : `Reached ${Math.round(raise.targetAltM / 1000).toLocaleString()} km`,
+    });
+    if (short && !failure)
+      failure = { type: 'orbitShort', detail: { leg: short.name, neededMS: short.neededMS, availableMS: short.availableMS, targetAltM: raise.targetAltM } };
+  }
   if (o.success) {
-    const toMoon = spec.mission.target !== 'orbit';
+    const toMoon = goesToMoon(spec.mission.target);
     if (toMoon) {
       moon = moonLedger(spec, catalog, o.remainingDeltaVMS);
       const short = moon.legs.find((l) => !l.ok);
@@ -150,6 +169,7 @@ export function flyMission(spec: RocketSpec, catalog: Catalog, opts: SimOptions 
     ascent,
     recoveries,
     moon,
+    raise,
     reentry,
     result: { success: !failure, failure, steps },
     flightDurationS: Math.max(ascent.durationS, lastRecovery),

@@ -3,6 +3,7 @@
 
 import { LEO_BUDGET_MS, TLI_BUDGET_MS, type StageDeltaV } from '../physics/deltaV';
 import type { Scorecard } from '../physics/golden';
+import { goesToMoon } from '../physics/raise';
 import type { MissionRecord } from '../physics/mission';
 import { CREW_G_LIMIT, DEFAULT_ENTRY_ANGLE_DEG } from '../physics/reentry';
 import type { Fault, FlightRecord, MissionSpec, Sample } from '../physics/types';
@@ -86,7 +87,7 @@ export function EngineerPanel(p: Props) {
   const stage = vehicle.stages[s.stageIndex];
   const totalDv = p.deltaV.reduce((a, d) => a + d.deltaVMS, 0);
   const m = p.missionSpec;
-  const toMoon = m.target !== 'orbit';
+  const toMoon = goesToMoon(m.target);
   const entryAngle = m.reentryAngleDeg ?? DEFAULT_ENTRY_ANGLE_DEG[toMoon ? 'moon' : 'orbit'];
   const re = mission.reentry;
 

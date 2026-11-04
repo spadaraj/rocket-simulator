@@ -70,11 +70,17 @@ describe('failures', () => {
 
   it('breaks apart when dynamic pressure exceeds the structure limit', () => {
     const spec = byId('saturn-v');
-    // An early, hard pitch kick keeps the rocket low and fast in thick air.
-    const rec = simulate({ ...spec, mission: { ...spec.mission, pitchKick: { timeS: 8, angleDeg: 2 } } }, catalog);
+    // A body only 60% as strong can't take max-Q on the way up.
+    const rec = simulate({ ...spec, structureScale: 0.6 }, catalog);
     expect(rec.outcome.failure?.type).toBe('breakup');
     expect(Number(rec.outcome.failure!.detail.dynamicPressurePa)).toBeGreaterThan(
       Number(rec.outcome.failure!.detail.limitPa),
     );
+  });
+
+  it('a rocket that tips over and breaks apart diving down has fallen back, not broken in the climb', () => {
+    const spec = byId('saturn-v');
+    const rec = simulate({ ...spec, mission: { ...spec.mission, pitchKick: { timeS: 8, angleDeg: 2 } } }, catalog);
+    expect(rec.outcome.failure?.type).toBe('crash');
   });
 });

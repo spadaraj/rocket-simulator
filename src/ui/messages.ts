@@ -33,8 +33,12 @@ export function missionFeedback(m: MissionRecord): Feedback {
     const splash = m.reentry ? ` Splashdown at ${m.reentry.splashSpeedMS.toFixed(1)} m/s after a ${m.reentry.peakGLoad.toFixed(1)} g re-entry.` : '';
     return {
       success: true,
-      roscoeTitle: toMoon ? 'You went to the Moon and back!' : 'You went to space and back!',
-      roscoeFix: recovered.length ? `And you got back the ${recovered.join(' and the ').toLowerCase()}!` : 'The crew splashed down safely!',
+      roscoeTitle: toMoon ? 'You went to the Moon and back!' : m.raise ? 'Your satellite made it to the high orbit!' : m.reentry ? 'You went to space and back!' : 'You made it to space!',
+      roscoeFix: recovered.length
+        ? `And you got back the ${recovered.join(' and the ').toLowerCase()}!`
+        : m.reentry
+          ? 'The crew splashed down safely!'
+          : 'Great flying!',
       title: toMoon ? 'Mission complete: Moon landing and safe return' : 'Mission complete',
       why: `${fb.why}${splash}`,
       fixes: recovered.length ? [`Recovered: ${recovered.join(', ')}.`] : ['Nothing was recovered; every stage was thrown away.'],
@@ -42,6 +46,15 @@ export function missionFeedback(m: MissionRecord): Feedback {
   }
   const d = f.detail;
   switch (f.type) {
+    case 'orbitShort':
+      return {
+        success: false,
+        roscoeTitle: 'Made it to space, but not enough fuel to climb high!',
+        roscoeFix: 'Try this: more fuel in the top stage.',
+        title: `High orbit short at ${d.leg}`,
+        why: `The top stage needs ${num(d.neededMS).toFixed(0)} m/s for the ${String(d.leg).toLowerCase()} but has ${num(d.availableMS).toFixed(0)} m/s.`,
+        fixes: ['More propellant in the upper stage.', 'A higher-Isp upper-stage engine.', 'A lighter payload.'],
+      };
     case 'moonShort':
       return {
         success: false,

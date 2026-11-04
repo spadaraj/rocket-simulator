@@ -4,6 +4,7 @@
 // If a stage is set to land, first find how much fuel it must hold back to land.
 
 import { tliNeededMS } from './moon';
+import { GEO_ALTITUDE_M, goesToMoon, hohmann } from './raise';
 import { setFill, setRecovery, stageFill } from './edit';
 import { flyMission } from './mission';
 import type { Catalog, FailureType, RocketSpec } from './types';
@@ -40,10 +41,12 @@ export function autoSize(input: RocketSpec, catalog: Catalog): AutoSizeResult {
   const n = spec.stages.length;
   const landIdx = spec.stages.findIndex((s) => s.recovery === 'propulsive');
   // Orbit-only flights just need to get there; Moon flights need the push toward the Moon left over.
-  const toMoon = spec.mission.target !== 'orbit';
-  const tliMS = toMoon ? tliNeededMS(spec.mission.targetOrbitAltitudeM) : 0;
+  const target = spec.mission.target;
+  const toMoon = goesToMoon(target);
+  const raise = target === 'highOrbit' ? hohmann(spec.mission.targetOrbitAltitudeM, spec.mission.highOrbitAltitudeM ?? GEO_ALTITUDE_M) : undefined;
+  const tliMS = toMoon ? tliNeededMS(spec.mission.targetOrbitAltitudeM) : raise ? Math.ceil(raise.dv1 + raise.dv2) : 0;
   const needDv = tliMS * (1 + MARGIN);
-  const goal = toMoon ? 'the Moon' : 'orbit';
+  const goal = toMoon ? 'the Moon' : raise ? 'the high orbit' : 'orbit';
   const withFills = (fills: number[]) => fills.reduce((s, f, i) => setFill(s, catalog, i, f), spec);
   const landed = (m: ReturnType<typeof flyMission>) =>
     landIdx < 0 || m.recoveries.some((r) => r.kind === 'stage' && r.stageIndex === landIdx && r.outcome === 'landed');
@@ -95,13 +98,13 @@ export function autoSize(input: RocketSpec, catalog: Catalog): AutoSizeResult {
     const o = full.r.outcome;
     const landingCost = landIdx >= 0 && o.success;
     const why = o.success
-      ? `full tanks reach orbit with ${o.remainingDeltaVMS.toFixed(0)} m/s left, but the Moon needs about ${tliMS} m/s`
+      ? `full tanks reach orbit with ${o.remainingDeltaVMS.toFixed(0)} m/s left, but ${goal} needs about ${tliMS} m/s`
       : `even with full tanks ${FAILURE_WORDS[o.failure!.type]}`;
     return {
       ok: false,
       spec,
-      message: landingCost && toMoon
-        ? `${landingNote}That leaves ${o.remainingDeltaVMS.toFixed(0)} m/s for the Moon, which needs about ${tliMS}. Make the top stage bigger, or don't land.`
+      message: landingCost && needDv > 0
+        ? `${landingNote}That leaves ${o.remainingDeltaVMS.toFixed(0)} m/s for ${goal}, which needs about ${tliMS}. Make the top stage bigger, or don't land.`
         : `${landingNote}Can't reach ${goal} yet: ${why}. Try bigger tanks, more engines or another stage.`,
       flightsTried: flights,
     };

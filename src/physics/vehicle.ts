@@ -18,6 +18,8 @@ const DEFAULT_GIMBAL_DEG = 5;
 export const BOOSTER_CHUTE_MASS_KG = 4000;
 /** Three 41 m mains at Cd ≈ 0.8: splashdown near 23 m/s like the Shuttle SRBs. */
 export const BOOSTER_CHUTE_DRAG_AREA_M2 = 3170;
+/** Stronger structure: extra dry mass per unit of extra strength, as a share of the stage's structure. */
+const STRUCTURE_MASS_PER_SCALE = 0.6;
 /** Touchdown limit when a stage tries to land without legs. */
 const NO_LEGS_LIMIT_MS = 1;
 
@@ -301,6 +303,16 @@ export function buildVehicle(spec: RocketSpec, baseCatalog: Catalog): Vehicle {
       ? Math.max(...engines.map((g) => g.engine.throttleMin))
       : 1;
 
+    // Reinforcing the structure: thicker walls everywhere except the engines.
+    const strength = spec.structureScale ?? 1;
+    if (strength > 1) {
+      const engineKg = engines.reduce((a, g) => a + g.engine.massKg * g.count, 0);
+      const extraKg = (dryMassKg - engineKg) * STRUCTURE_MASS_PER_SCALE * (strength - 1);
+      dryMassKg += extraKg;
+      massPoints.push({ stageIndex, xM: (bottomM + topM) / 2, massKg: extraKg });
+    }
+    maxQ *= strength;
+
     return {
       name: s.name,
       color: s.color,
@@ -364,7 +376,7 @@ export function buildVehicle(spec: RocketSpec, baseCatalog: Catalog): Vehicle {
     stages,
     payloadMassKg,
     jettisonables,
-    payloadMaxDynamicPressurePa: payloadMaxQ,
+    payloadMaxDynamicPressurePa: payloadMaxQ * (spec.structureScale ?? 1),
     segments,
     fins,
     heightM,

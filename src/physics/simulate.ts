@@ -690,9 +690,11 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
     if (!outcome) {
       const limit = structuralLimit(vehicle, cfg);
       if (q > limit) {
+        // Breaking up while diving back down is a fall, not a design that was too weak.
+        const falling = (s[0] * s[2] + s[1] * s[3]) / Math.hypot(s[0], s[1]) < -50;
         fail(
           {
-            type: 'breakup',
+            type: falling ? 'crash' : 'breakup',
             tS: t,
             detail: {
               dynamicPressurePa: q,
@@ -701,7 +703,7 @@ export function simulate(spec: RocketSpec, catalog: Catalog, opts: SimOptions = 
               mach: Math.hypot(vax, vay) / a.speedOfSoundMS,
             },
           },
-          'Structural breakup',
+          falling ? 'Fell back and broke apart' : 'Structural breakup',
           POST_FAILURE_COAST_S,
         );
       }

@@ -22,13 +22,36 @@ import { EngineerResult, RoscoeResult, type FixState } from './ui/ResultCard';
 import { RocketThumb } from './ui/RocketThumb';
 import { RoscoeBuilder } from './ui/RoscoeBuilder';
 import { RoscoeDials } from './ui/RoscoeDials';
+import { RaiseView } from './ui/RaiseView';
+import { lessonFor } from './ui/lessons';
+import { LessonCard } from './ui/ResultCard';
+import { Coach } from './ui/mission/Coach';
+import { Did } from './ui/mission/Characters';
+import { Briefing, Debrief, Home, MissionMap, SkillBook } from './ui/mission/MissionScreens';
+import { CONTROL_INFO } from './missions/controlInfo';
+import { introSteps } from './missions/intro';
+import { MISSIONS } from './missions/missions';
+import { controlsFor, loadProgress, saveProgress, type Progress } from './missions/progress';
+import type { CoachContext, Mission, PlayStats } from './missions/types';
+import type { ControlId } from './physics/controls';
 import { ScorecardBadge } from './ui/Scorecard';
 import { StageStrip } from './ui/StageStrip';
 import { autoSizeAsync, findFixesAsync } from './ui/whatIf';
 
 type Mode = 'roscoe' | 'engineer';
-type Phase = 'ready' | 'countdown' | 'flying' | 'moon' | 'reentry' | 'done';
-type Scene = 'flight' | 'moon' | 'reentry';
+type Phase = 'ready' | 'countdown' | 'flying' | 'raise' | 'moon' | 'reentry' | 'done';
+type Scene = 'flight' | 'raise' | 'moon' | 'reentry';
+type Screen = 'home' | 'map' | 'skills' | 'sandbox' | 'mission';
+
+const NO_STATS: PlayStats = { usedSlow: false, chaos: false, saved: false };
+
+/** How a mission flight went: the goal, and which star goals were met. */
+interface MissionOutcome {
+  won: boolean;
+  starChecks: boolean[];
+  earned: number;
+  best: number;
+}
 type Tab = 'build' | 'fly' | 'charts';
 
 const ROSCOE_SPEEDS = [
@@ -103,6 +126,18 @@ function useInstallPrompt() {
 }
 
 export default function App() {
+  const [screen, setScreen] = useState<Screen>('home');
+  const [progress, setProgress] = useState<Progress>(loadProgress);
+  const [active, setActive] = useState<Mission | null>(null);
+  const [missionStart, setMissionStart] = useState<RocketSpec | null>(null);
+  const [briefing, setBriefing] = useState(false);
+  const [coachSteps, setCoachSteps] = useState<ReturnType<typeof introSteps>>([]);
+  const [stats, setStats] = useState<PlayStats>(NO_STATS);
+  const [attempts, setAttempts] = useState(0);
+  const [outcome, setOutcome] = useState<MissionOutcome | null>(null);
+  const [showMe, setShowMe] = useState<{ target: string; say: string } | null>(null);
+  const [line, setLine] = useState<string | null>(null);
+  const firedLines = useRef(new Set<string>());
   const [mode, setModeState] = useState<Mode>(loadMode);
   const [presetId, setPresetId] = useState(presets[0].id);
   const [picking, setPicking] = useState(false);
@@ -122,8 +157,14 @@ export default function App() {
   const [saved, setSaved] = useState<Run[]>([]);
   const runId = useRef(1);
   const install = useInstallPrompt();
-  const roscoe = mode === 'roscoe';
-  const modified = spec !== preset;
+  const inMission = screen === 'mission' && !!active;
+  // Missions are played in Roscoe mode, with only the controls taught so far.
+  const roscoe = mode === 'roscoe' || inMission;
+  const controls = useMemo(() => (inMission ? controlsFor(active!.id) : undefined), [inMission, active]);
+  const fresh = useMemo(() => (inMission ? new Set<ControlId>(active!.unlocks) : undefined), [inMission, active]);
+  const can = (c: ControlId) => !controls || controls.has(c);
+  const base = inMission && missionStart ? missionStart : preset;
+  const modified = spec !== base;
 
   const setMode = (m: Mode) => {
     setModeState(m);
@@ -146,12 +187,17 @@ export default function App() {
   };
 
   const vehicle = useMemo(() => buildVehicle(spec, catalog), [spec]);
-  const faults = useMemo(() => (chaos ? rollFaults(spec, catalog, seed) : []), [chaos, seed, spec]);
+  const chaosOn = chaos && can('chaos');
+  const faults = useMemo(
+    () => [...(inMission ? (active!.faults ?? []) : []), ...(chaosOn ? rollFaults(spec, catalog, seed) : [])],
+    [chaosOn, seed, spec, inMission, active],
+  );
   const mission = useMemo(() => flyMission(spec, catalog, { faults }), [spec, faults]);
   const record = mission.ascent;
   const deltaV = useMemo(() => stageDeltaV(spec, catalog), [spec]);
   const thumbs = useMemo(() => Object.fromEntries(allRockets.map((p) => [p.id, buildVehicle(p, catalog)])), [allRockets]);
   const feedback = useMemo(() => missionFeedback(mission), [mission]);
+  const lesson = useMemo(() => lessonFor(mission, spec), [mission, spec]);
   const realFlight = useMemo(() => {
     const g = goldenFor(presetId);
     return g ? scorecard(g, record) : undefined;
@@ -184,7 +230,11 @@ export default function App() {
     const list = isMine ? myRockets.map((r) => (r.id === id ? mine : r)) : [...myRockets, mine];
     setMyRockets(list);
     storeMyRockets(list);
-    setPresetId(id);
+    setStats((st) => ({ ...st, saved: true }));
+    if (inMission) {
+      // Stay in the mission: the saved copy is now the mission rocket.
+      setMissionStart(mine);
+    } else setPresetId(id);
     setSpec(mine);
   };
 
@@ -224,6 +274,7 @@ export default function App() {
   };
   const afterFlight = () => {
     if (!record.outcome.success) return finish('flight');
+    if (mission.raise) return setPhase('raise');
     if (mission.moon) return setPhase('moon');
     if (mission.reentry) return setPhase('reentry');
     finish('flight');
@@ -242,6 +293,9 @@ export default function App() {
 
   const launch = () => {
     pb.seek(0);
+    firedLines.current.clear();
+    setLine(null);
+    setOutcome(null);
     setPhase('countdown');
   };
 
@@ -279,7 +333,98 @@ export default function App() {
     setSaved([...saved, { id: n, label: `${spec.name}${modified ? ' (modified)' : ''} #${n}`, color, record }]);
   };
 
-  const scene: Scene = phase === 'moon' ? 'moon' : phase === 'reentry' ? 'reentry' : phase === 'done' ? doneScene : 'flight';
+  const scene: Scene = phase === 'raise' ? 'raise' : phase === 'moon' ? 'moon' : phase === 'reentry' ? 'reentry' : phase === 'done' ? doneScene : 'flight';
+
+  // ---------- Mission Mode ----------
+
+  const startMission = (m: Mission) => {
+    const start = m.rocket();
+    setActive(m);
+    setMissionStart(start);
+    setSpec(start);
+    setScreen('mission');
+    setTab('fly');
+    setBriefing(true);
+    setCoachSteps([]);
+    setAttempts(0);
+    setOutcome(null);
+    setStats(NO_STATS);
+    setShowMe(null);
+    setLine(null);
+    setAutoMessage(null);
+    pb.pause();
+    pb.seek(0);
+    setPhase('ready');
+  };
+  const nextMission = active ? MISSIONS[MISSIONS.indexOf(active) + 1] : undefined;
+  const leaveMission = () => {
+    pb.pause();
+    setShowMe(null);
+    setLine(null);
+    setScreen('map');
+  };
+  const goSandbox = () => {
+    setActive(null);
+    setScreen('sandbox');
+    setSpec(preset);
+    setPhase('ready');
+  };
+
+  // Score the flight once it's over.
+  useEffect(() => {
+    if (!inMission || phase !== 'done' || outcome) return;
+    const ctx = { m: mission, spec, stats: { ...stats, chaos: chaosOn } };
+    const won = active!.goal(ctx);
+    const starChecks = active!.stars.map((g) => won && g.check(ctx));
+    const earned = won ? 1 + starChecks.filter(Boolean).length : 0;
+    const best = Math.max(earned, progress.stars[active!.id] ?? 0);
+    if (won && best > (progress.stars[active!.id] ?? 0)) {
+      const next = { stars: { ...progress.stars, [active!.id]: best } };
+      setProgress(next);
+      saveProgress(next);
+    }
+    if (!won) setAttempts((n) => n + 1);
+    setOutcome({ won, starChecks, earned, best });
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A changed rocket is a new try.
+  useEffect(() => setOutcome(null), [spec]);
+
+  // Slow motion counts for a star in the first mission.
+  useEffect(() => {
+    if (inMission && phase === 'flying' && pb.speed === 3 && !stats.usedSlow) setStats((st) => ({ ...st, usedSlow: true }));
+  }, [inMission, phase, pb.speed, stats.usedSlow]);
+
+  // Did talks during the flight at the mission's big moments.
+  useEffect(() => {
+    if (!inMission || phase !== 'flying' || !active!.flightLines) return;
+    for (const e of record.events) {
+      const say = active!.flightLines[e.type];
+      const key = `${e.type}@${e.tS}`;
+      if (say && pb.t >= e.tS && pb.t < e.tS + 8 && !firedLines.current.has(e.type)) {
+        firedLines.current.add(e.type);
+        firedLines.current.add(key);
+        setLine(say);
+      }
+    }
+  }, [pb.t]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!line) return;
+    const id = window.setTimeout(() => setLine(null), 6000);
+    return () => window.clearTimeout(id);
+  }, [line]);
+
+  /** "Show me": go to where the control lives and have Did point at it. */
+  const onShowMe = (c: ControlId) => {
+    const info = CONTROL_INFO[c];
+    if (info.tab === 'build') {
+      again();
+      setTab('build');
+    }
+    setShowMe({ target: c, say: `${info.label}: ${info.explain}` });
+  };
+
+  const coachCtx: CoachContext = useMemo(() => ({ phase, tab, spec, speed: pb.speed }), [phase, tab, spec, pb.speed]);
 
   // Roscoe gets a big message when something surprising happens mid-flight.
   const toastEvent = record.events.find((e) => e.type === 'engineOut' && pb.t >= e.tS && pb.t < e.tS + 5);
@@ -287,6 +432,7 @@ export default function App() {
 
   const replays: { label: string; onClick: () => void }[] = [
     { label: roscoe ? '🚀 Watch the launch' : 'Replay launch', onClick: () => (setPhase('flying'), pb.seek(0), pb.play()) },
+    ...(mission.raise ? [{ label: roscoe ? '🛰️ Watch the climb' : 'Replay orbit raise', onClick: () => setPhase('raise') }] : []),
     ...(mission.moon ? [{ label: roscoe ? '🌕 Watch the Moon trip' : 'Replay Moon leg', onClick: () => setPhase('moon') }] : []),
     ...(mission.reentry && (!mission.moon || mission.moon.success)
       ? [{ label: roscoe ? '🔥 Watch coming home' : 'Replay re-entry', onClick: () => setPhase('reentry') }]
@@ -299,18 +445,56 @@ export default function App() {
   }, [roscoe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'build', label: roscoe ? '🔧 Build' : 'Build' },
+    ...(can('build') ? [{ id: 'build' as Tab, label: roscoe ? '🔧 Build' : 'Build' }] : []),
     { id: 'fly', label: roscoe ? '🚀 Fly' : 'Fly' },
     ...(roscoe ? [] : [{ id: 'charts' as Tab, label: 'Charts' }]),
   ];
 
-  return (
-    <div className={`app ${mode}`}>
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">A1-39</span>
-          <span className="brand-name">Rocket Simulator</span>
+  if (screen === 'home')
+    return <Home progress={progress} onMissions={() => setScreen('map')} onSandbox={goSandbox} onSkills={() => setScreen('skills')} />;
+  if (screen === 'map') return <MissionMap progress={progress} onPlay={startMission} onHome={() => setScreen('home')} />;
+  if (screen === 'skills') return <SkillBook progress={progress} onBack={() => setScreen('home')} />;
+
+  // Mission Mode: Did's hint grows with each failed try; on the third, he offers to show the fix.
+  const hint =
+    inMission && attempts > 0 ? (
+      <div className="lesson-hint">
+        <Did size={56} />
+        <div>
+          <b>Flight Director Did:</b> {attempts === 1 ? active!.hints[0] : active!.hints[1]}
+          {attempts >= 3 && can(active!.hintControl) && (
+            <button className="btn small primary" onClick={() => onShowMe(active!.hintControl)}>
+              👉 Show me how
+            </button>
+          )}
         </div>
+      </div>
+    ) : null;
+
+  return (
+    <div className={`app ${mode} ${inMission ? 'in-mission' : ''}`}>
+      <header className="topbar">
+        <button className="brand" onClick={() => (inMission ? leaveMission() : setScreen('home'))} title={inMission ? 'Back to the mission map' : 'Home'}>
+          {inMission ? (
+            <img src="./brand/spaceq-logo.jpg" alt="Space Q" className="brand-logo" />
+          ) : (
+            <>
+              <span className="brand-mark">🏠 A1-39</span>
+              <span className="brand-name">Sandbox</span>
+            </>
+          )}
+        </button>
+        {inMission ? (
+          <div className="mission-chip">
+            <span className="sq-patch">{active!.patch}</span>
+            <span>
+              <b>
+                Mission {MISSIONS.indexOf(active!) + 1}: {active!.title}
+              </b>
+              <small>🎯 {active!.goalText}</small>
+            </span>
+          </div>
+        ) : (
         <nav className="picker" aria-label="Choose a rocket">
           <button className="pick on" onClick={() => setPicking(!picking)} aria-expanded={picking} title="Choose a rocket">
             <RocketThumb vehicle={vehicle} height={roscoe ? 60 : 40} />
@@ -364,9 +548,17 @@ export default function App() {
             </>
           )}
         </nav>
+        )}
         <div className="tabs" role="tablist" aria-label="Screen">
           {tabs.map((t) => (
-            <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>
+            <button
+              key={t.id}
+              role="tab"
+              data-coach={`tab:${t.id}`}
+              aria-selected={tab === t.id}
+              className={`${tab === t.id ? 'on' : ''}${t.id === 'build' && fresh?.has('build') ? ' fresh' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
               {t.label}
             </button>
           ))}
@@ -376,14 +568,22 @@ export default function App() {
             📲 Install
           </button>
         )}
+        {can('chaos') && (
         <button
-          className={`chaos-toggle ${chaos ? 'on' : ''}`}
+          data-coach="chaos"
+          className={`chaos-toggle ${chaos ? 'on' : ''}${fresh?.has('chaos') ? ' fresh' : ''}`}
           onClick={() => setChaos(!chaos)}
           aria-pressed={chaos}
           title="Chaos Mode: something random goes wrong on each flight"
         >
           🎲 Chaos{chaos ? ' on' : ''}
         </button>
+        )}
+        {inMission ? (
+          <button className="chaos-toggle" onClick={leaveMission}>
+            🗺️ Missions
+          </button>
+        ) : (
         <div className="mode-toggle" role="group" aria-label="Mode">
           <button className={roscoe ? 'on' : ''} onClick={() => setMode('roscoe')}>
             Roscoe
@@ -392,6 +592,7 @@ export default function App() {
             Engineer
           </button>
         </div>
+        )}
       </header>
 
       {tab === 'build' && (
@@ -409,7 +610,9 @@ export default function App() {
               onReset={() => setSpec(preset)}
               onFly={() => setTab('fly')}
               onSave={saveRocket}
-              saved={isMine && !modified}
+              saved={(isMine || (inMission && stats.saved)) && !modified}
+              controls={controls}
+              fresh={fresh}
             />
           ) : (
             <EngineerBuilder
@@ -449,7 +652,7 @@ export default function App() {
                   armed={phase !== 'ready' && phase !== 'countdown'}
                   recoveries={mission.recoveries}
                 />
-                {roscoe && (
+                {roscoe && can('stageStrip') && (
                   <StageStrip
                     vehicle={vehicle}
                     sample={sample}
@@ -457,10 +660,20 @@ export default function App() {
                     live={phase === 'flying' && pb.t < record.durationS}
                   />
                 )}
-                {roscoe && phase !== 'ready' && <RoscoeDials sample={sample} />}
+                {roscoe && phase !== 'ready' && (
+                  <RoscoeDials sample={sample} limitPa={can('airPush') ? record.summary.structuralLimitPa : undefined} />
+                )}
                 {phase !== 'ready' && phase !== 'countdown' && <MissionControl items={record.checklist} t={pb.t} roscoe={roscoe} />}
                 {roscoe && phase === 'flying' && toast && <div className="toast">{toast}</div>}
               </>
+            )}
+            {scene === 'raise' && mission.raise && (
+              <RaiseView
+                ledger={mission.raise}
+                roscoe={roscoe}
+                sceneSeconds={roscoe ? 14 : 9}
+                onDone={phase === 'raise' ? () => (mission.reentry ? setPhase('reentry') : finish('raise')) : () => {}}
+              />
             )}
             {scene === 'moon' && mission.moon && (
               <MoonLeg
@@ -475,15 +688,18 @@ export default function App() {
             {scene === 'reentry' && mission.reentry && (
               <ReentryView record={mission.reentry} roscoe={roscoe} sceneSeconds={roscoe ? 24 : 14} onDone={phase === 'reentry' ? () => finish('reentry') : () => {}} />
             )}
-            {(phase === 'moon' || phase === 'reentry') && (
-              <button className="btn small skip" onClick={phase === 'moon' ? afterMoon : () => finish('reentry')}>
+            {(phase === 'raise' || phase === 'moon' || phase === 'reentry') && (
+              <button
+                className="btn small skip"
+                onClick={phase === 'raise' ? () => (mission.reentry ? setPhase('reentry') : finish('raise')) : phase === 'moon' ? afterMoon : () => finish('reentry')}
+              >
                 Skip ⏭
               </button>
             )}
 
             {phase === 'ready' && (
               <div className="launch-wrap">
-                <button className="launch-btn" onClick={launch}>
+                <button className="launch-btn" data-coach="launch" onClick={launch}>
                   LAUNCH
                 </button>
                 {chaos && <div className="chaos-note">🎲 Chaos Mode is on: something might go wrong!</div>}
@@ -492,7 +708,54 @@ export default function App() {
 
             {phase === 'countdown' && <Countdown from={10} onDone={startFlight} voice={roscoe} />}
 
-            {phase === 'done' && roscoe && (
+            {phase === 'done' && inMission && outcome?.won && (
+              <Debrief
+                mission={active!}
+                earned={outcome.earned}
+                best={outcome.best}
+                starChecks={outcome.starChecks}
+                onNext={nextMission ? () => startMission(nextMission) : undefined}
+                onRetry={() => setSpec({ ...spec })}
+                onMap={leaveMission}
+                replays={replays}
+              />
+            )}
+            {phase === 'done' && inMission && outcome && !outcome.won && !lesson && (
+              <div className="result-card roscoe lose lesson">
+                <div className="lesson-head">
+                  <Did size={84} mood="oops" />
+                  <div>
+                    <div className="result-kicker">Almost!</div>
+                    <h2>The flight went fine, but the mission was: {active!.goalText}.</h2>
+                  </div>
+                </div>
+                {hint}
+                <div className="result-actions">
+                  {!hint && (
+                    <button className="btn big" onClick={() => onShowMe(active!.hintControl)}>
+                      👉 Show me
+                    </button>
+                  )}
+                  <button className="btn big primary" onClick={again}>
+                    🚀 Fly again
+                  </button>
+                </div>
+              </div>
+            )}
+            {phase === 'done' && roscoe && lesson && (!inMission || outcome) && (
+              <LessonCard
+                lesson={lesson}
+                fix={fix}
+                steps={mission.result.steps}
+                replays={replays}
+                onAgain={again}
+                onTryFix={tryFix}
+                onShowMe={onShowMe}
+                controls={controls}
+                hint={hint}
+              />
+            )}
+            {phase === 'done' && roscoe && !inMission && !lesson && (
               <RoscoeResult
                 fb={feedback}
                 fix={fix}
@@ -509,7 +772,8 @@ export default function App() {
                 <button className="btn" onClick={pb.playing ? pb.pause : pb.play} aria-label={pb.playing ? 'Pause' : 'Play'}>
                   {pb.playing ? '⏸' : '▶'}
                 </button>
-                {roscoe
+                <span className="speed-group" data-coach="speed">
+                {!can('speed') ? null : roscoe
                   ? ROSCOE_SPEEDS.map((s) => (
                       <button
                         key={s.speed}
@@ -525,6 +789,7 @@ export default function App() {
                         {sp}×
                       </button>
                     ))}
+                </span>
                 <input
                   className="scrubber"
                   type="range"
@@ -568,6 +833,22 @@ export default function App() {
           )}
         </main>
       )}
+
+      {inMission && briefing && (
+        <Briefing
+          mission={active!}
+          best={progress.stars[active!.id] ?? 0}
+          onBack={leaveMission}
+          onGo={() => {
+            setBriefing(false);
+            setCoachSteps(introSteps(active!));
+          }}
+        />
+      )}
+      {inMission && !briefing && (
+        <Coach steps={coachSteps} ctx={coachCtx} showMe={showMe} onShowMeDone={() => setShowMe(null)} line={phase === 'flying' ? line : null} />
+      )}
+      {!inMission && showMe && <Coach steps={[]} ctx={coachCtx} showMe={showMe} onShowMeDone={() => setShowMe(null)} />}
     </div>
   );
 }

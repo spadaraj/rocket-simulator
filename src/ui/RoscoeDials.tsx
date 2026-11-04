@@ -43,7 +43,8 @@ function Dial({ label, emoji, value, unit, fraction, color }: DialProps) {
   );
 }
 
-export function RoscoeDials({ sample }: { sample: Sample }) {
+/** limitPa: the rocket's strength, for the Air push dial (shown when given). */
+export function RoscoeDials({ sample, limitPa }: { sample: Sample; limitPa?: number }) {
   // Speed over the ground (the air turns with the Earth), so it reads 0 on the pad.
   const kmh = sample.airSpeedMS * 3.6;
   const fuel = sample.boostersAttached
@@ -68,6 +69,18 @@ export function RoscoeDials({ sample }: { sample: Sample }) {
         fraction={fuel}
         color={fuel < 0.15 ? '#ff5a5a' : '#3ccf7a'}
       />
+      {limitPa !== undefined && (
+        <div data-coach="airPush">
+          <Dial
+            label="Air push"
+            emoji="🌬️"
+            value={`${Math.round((sample.dynamicPressurePa / limitPa) * 100)}`}
+            unit="%"
+            fraction={sample.dynamicPressurePa / limitPa}
+            color={sample.dynamicPressurePa > limitPa * 0.85 ? '#ff5a5a' : sample.dynamicPressurePa > limitPa * 0.6 ? '#ffb02e' : '#3ccf7a'}
+          />
+        </div>
+      )}
     </div>
   );
 }

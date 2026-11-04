@@ -684,6 +684,15 @@
     "notes": "Drawn as a capsule shape; drops away once the air is thin."
   },
   {
+    "id": "satellite-small",
+    "type": "payload",
+    "name": "Little satellite",
+    "massKg": 500,
+    "confidence": "estimate",
+    "source": "Example small satellite (Sputnik 1 was 84 kg; small weather and science satellites are a few hundred kg).",
+    "notes": "Rides inside the nose, so it is not drawn."
+  },
+  {
     "id": "satellite-heavy",
     "type": "payload",
     "name": "Heavy satellite",

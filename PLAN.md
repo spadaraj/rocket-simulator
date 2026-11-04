@@ -259,6 +259,135 @@ Start with a loose tolerance (within about 10%), tighten it as the model improve
 
 Warnings when a design uses numbers no real hardware has achieved, such as an Isp beyond what its propellant allows, or tanks lighter than real materials permit.
 
+## Mission Mode and the Space Q story
+
+Two ways to play, chosen on a home screen: **🚀 Missions** and **🛠️ Sandbox**. The sandbox is the app as it is now, always open. Missions unlock in order; one star unlocks the next, and two- and three-star goals invite replays. One player; progress is saved on the device.
+
+### The story
+
+Roscoe is the newest astronaut cadet at **Space Q**, his own space company. The A1-39 is Space Q's flagship rocket. Space Q's big dream is to send a crew to Mars and bring them home, and every chapter is a step toward it.
+
+- **Roscoe the cadet** appears in the game as a cartoon character: brown hair, big brown eyes, a big smile, a white spacesuit with blue trim, and a Space Q patch on the chest. He's drawn as a simple vector illustration based on a reference picture, which stays on this computer (`private/`, not committed) because the repo and site are public. He shows up on the home screen, in briefings and debriefs, and celebrating on the trophy wall.
+- **Flight Director Did** is the coach and storyteller. He briefs each mission, talks during the flight, and debriefs afterwards. Every line is read aloud and kept short.
+- **The Chief Engineer** shows up when a new builder control unlocks, to explain it.
+- **The Mission Scientist** shows up in the planet chapters, asking for probes.
+- **Two kinds of mission:** *History sims* re-fly real missions in Space Q's training simulator ("Before we fly our own, let's fly Vostok 1"). *Space Q missions* are made-up story missions, and they grow more common further along.
+- **Branding:** the Space Q logo (`docs/brand/spaceq-logo.webp`) appears on the home screen, mission patches and briefings. Mission Mode uses Space Q's colours:
+
+  | Colour | Hex | Used for |
+  | --- | --- | --- |
+  | Cream | about #F6EBCB | Briefing and debrief cards |
+  | Ink | about #1F2A22 | Text and outlines |
+  | Mars orange | about #E2622B | Buttons and highlights |
+  | Rust | about #9E3B22 | Accents |
+
+  The sandbox keeps its blueprint look.
+- **Ranks** go up with each chapter: Cadet → Pilot → Commander → Moon Walker → Planet Hunter → Deep Space Explorer → Space Q Legend. Each mission earns a patch for the trophy wall.
+
+### How each mission teaches
+
+- **One new idea per mission,** and at most one new control. Controls appear only once unlocked ("NEW!" glow); the sandbox shows everything.
+- **The coach points:** a hand shows what to tap, and the step waits until he does it.
+- **Some missions start broken on purpose** (for example, "Too Heavy!" hands over a rocket that can't lift off).
+- **Hints get stronger with each try:** a nudge, then a specific tip, then a "Show me" walk-through.
+- **Each debrief ends with "🧠 You learned…",** collected in a Skill Book.
+- **Early missions stay simple:** Chaos Mode and the detailed numbers stay hidden until the basics are learned.
+
+### Failures that teach (Roscoe's feedback)
+
+Roscoe's feedback: a failure card that says "the air pushed too hard and it broke" doesn't tell him how to fix it. So every failure card, in Missions and in the sandbox, has three parts:
+
+1. **What happened:** a short replay of the moment, with the gauge that went wrong highlighted. For example, the 💨 Air push gauge crossing the red "too strong" line.
+2. **Why, in rocket science:** two or three simple sentences and a little diagram. For example: "Air pushes harder the faster you go while the air is thick. Your rocket was going very fast, very low. The push was bigger than the rocket's strength."
+3. **How you can fix it:** two or three fixes, each pointing at the exact control Roscoe can change himself. "Show me" makes Flight Director Did highlight the control and say what it does. Fixes are still tested by re-flying, as now. After a fix works, the debrief says why it worked.
+
+Every failure gets this treatment: too heavy, broke apart, tumbled, engine failed, ran out of fuel, fell back, couldn't reach the Moon, burned up, skipped off the air, too many g, and crash landing. Each one also links to its Skill Book page.
+
+**Every fix must be something Roscoe can actually change in his builder.** He has no throttle today, so breakups need new controls:
+
+- **🐢 Ease off in thick air:** the max-Q throttle as a simple on/off toggle.
+- **💪 Stronger body:** a structure upgrade that adds weight.
+
+**New flight gauges** (shown once the matching mission unlocks them):
+
+- **💨 Air push:** with a red strength line.
+- **🔥 Heat:** for re-entry.
+- **🫨 Squish:** for g-force.
+
+### Mission card format
+
+Every mission has the same parts:
+
+- **Briefing:** story lines and a patch.
+- **Starting rocket:** a preset, a saved rocket, or a blank one.
+- **Fixed payload,** if the mission has one.
+- **Goal:** checked automatically from the flight record.
+- **Star goals:**
+  - ⭐ the goal itself.
+  - ⭐⭐ and ⭐⭐⭐: doing it well, such as landing the booster, using a smaller rocket, or flying with Chaos Mode on.
+- **Coach lines:** at flight events.
+- **Debrief:** "You learned" and the next unlock.
+
+### Mission ladder
+
+| # | Mission | Kind | Teaches | Unlocks |
+| --- | --- | --- | --- | --- |
+| **Ch. 1** | **Launch School (Cadet)** | | | |
+| 1 | Liftoff! | Space Q | Launch, countdown, dials | Speed buttons |
+| 2 | Too Heavy! | Space Q | Thrust vs. weight | Build tab, engine count |
+| 3 | First Orbit (Vostok 1) | History | Going sideways fast, stages | Stage strip |
+| 4 | Fuel for the Job | Space Q | Tanks, the power meter | Tank size, "Make it reach space" |
+| 5 | Beep Beep (Sputnik) | History | Launching a satellite | Payload slots, nose cover |
+| 6 | Coming Home (Mercury) | History | Heat shields, re-entry, parachutes | Heat shield |
+| 7 | Don't Break It | Space Q | Max-Q, fins, tumbling | Fins |
+| 8 | Recycle the Booster (Falcon 9) | History | Saving landing fuel | "Land it", booster parachutes |
+| 9 | Houston, We Have a Problem | Space Q | Engine failure, mission control | Chaos Mode |
+| **Ch. 2** | **Higher and Further (Pilot)** | | | |
+| 10 | Visit the Space Station | History | Aiming for a set height | Target height |
+| 11 | Weather Watcher | Space Q | Two burns to geostationary orbit | Orbit burns |
+| 12 | Space Q's Own Rocket | Space Q | Capstone: build from scratch | Start from scratch, Save |
+| **Ch. 3** | **The Moon (Commander → Moon Walker)** | | | |
+| 13 | Around the Moon (Artemis II) | History | The trip to the Moon, free return | |
+| 14 | Land on the Moon (Apollo 11) | History | The full fuel budget, landers | Lander slot |
+| 15 | Get Them Home (Apollo 13) | History | When it breaks, free return saves the crew | |
+| 16 | Moon Base Delivery | Space Q | Heavy cargo; landing vs. reaching the Moon | |
+| **Ch. 4** | **Inner Planets (Planet Hunter)** | | | |
+| 17 | Hello Venus (Mariner 2) | History | Leaving Earth, launch windows | Solar system map |
+| 18 | Mars Orbiter | History | Braking into orbit at a planet | |
+| 19 | Rover Drop (Perseverance) | History | Thin air: parachute, then rockets | Rover |
+| 20 | Space Q Lands on Mars | Space Q | Space Q's own lander: plan the whole trip and touch down | Mars lander |
+| 21 | Hot Hot Hot | Space Q | Venus lander: how long can it last? | |
+| 22 | Closest to the Sun (MESSENGER) | History | Falling sunward takes braking | |
+| **Ch. 5** | **Asteroid Belt and Ceres** | | | |
+| 23 | Through the Belt | Space Q | The belt is mostly empty space | |
+| 24 | Two Stops (Dawn: Vesta and Ceres) | History | Visiting two places in one trip | |
+| 25 | Space Rock Sample | Space Q | Land, grab a sample, come home | |
+| **Ch. 6** | **The Giants (Deep Space Explorer)** | | | |
+| 26 | Jupiter Probe (Juno) | History | Why deep space needs tiny probes | Probes, kick stages |
+| 27 | Slingshot! | Space Q | Borrowing a planet's speed | Gravity assists |
+| 28 | Ring Dive (Cassini) | History | Saturn | |
+| 29 | Grand Tour (Voyager 2) | History | Chaining slingshots to Uranus and Neptune | |
+| **Ch. 7** | **The Edge (Space Q Legend)** | | | |
+| 30 | Pluto Flyby (New Horizons) | History | Ten-year trips | |
+| 31 | Land on Pluto ⭐ Roscoe's pick | Space Q | Landing with no air, far from the Sun | |
+| 32 | Dwarf Planet Tour | Space Q | Eris, Haumea, Makemake | |
+| 33 | **Space Q's Dream: Crew to Mars and Back** | Space Q | Everything | |
+
+### New physics for the later chapters
+
+- **Burns in orbit:** extra burns after reaching orbit (geostationary orbit, orbit raising).
+- **Solar system scene:** a 2D map of the Sun, the eight planets, the dwarf planets (Ceres, Pluto, Haumea, Makemake, Eris) and the asteroid belt. Orbits are flat; Pluto and Eris keep their stretched shape. Fast-forward handles trips that take years.
+- **Transfers:** patched conics (simple one-body orbits stitched together), Hohmann transfers between planets, launch windows, and braking into orbit at the destination.
+- **Gravity assists:** slingshots past a planet.
+- **Landings by type:** Mars (thin air: parachute, then rockets), Venus (crushing air and heat), and airless bodies like Ceres and Pluto (reusing the Moon-landing budget).
+- **New parts:** small probes, kick stages, a rover with sky crane, and a Mars lander.
+
+### Parked for later
+
+- Money and budgets.
+- Making your own missions.
+- More than one player.
+
 ## Roadmap
 
 This weekend's goal: Roscoe presses Launch on a rough A1-39 and watches it fly to orbit, or fail, with a reason. Each later phase adds one layer and stays playable.
@@ -295,6 +424,18 @@ This weekend's goal: Roscoe presses Launch on a rough A1-39 and watches it fly t
 - [x] Free-design parts with plausibility warnings
 - [x] True 2D Earth–Moon trajectory
 - [x] Install on the Fire tablet home screen as an app
+
+**Phase 5: Mission Mode and the Space Q story**
+
+- [x] 5a: Mission Mode foundations, with Chapters 1–2:
+  - **Failures that teach:** what happened, why, and fixes Roscoe can make himself. Applies in the sandbox too.
+  - **New controls and gauges:** the Air push gauge and the Ease-off and Stronger-body controls.
+  - **Space Q look:** home screen (Missions / Sandbox), Space Q logo and colours, and the cartoon Roscoe.
+  - **Story and coaching:** Flight Director Did and the story lines, controls that unlock as he learns, hints that get stronger, and the Skill Book.
+  - **The missions:** the mission framework, stars and saved progress; Chapters 1–2, including burns in orbit.
+- [ ] 5b: Chapter 3, the Moon
+- [ ] 5c: Solar system map, transfers and launch windows; Chapters 4–5 (Mars landing, asteroid belt, Ceres)
+- [ ] 5d: Gravity assists, the outer planets, dwarf planets; Chapters 6–7 and the finale
 
 ## Appendix: kickoff prompt for Claude Code
 

@@ -12,11 +12,13 @@ import {
   setHeatShield,
   setMission,
   setRecovery,
+  setStructure,
   setTank,
   stageEngine,
   stageFill,
   stageTank,
 } from './edit';
+import { fixControl, type ControlId } from './controls';
 import { failureRank, flyMission } from './mission';
 import { DEFAULT_ENTRY_ANGLE_DEG } from './reentry';
 import type { SimOptions } from './simulate';
@@ -46,6 +48,8 @@ export interface FixResult {
   complete: boolean;
   /** Otherwise, the next thing that goes wrong. */
   nextProblem?: MissionFailureType;
+  /** The builder control this fix changes, if Roscoe can make it himself. */
+  control?: ControlId;
 }
 
 export function fixCandidates(
@@ -190,6 +194,15 @@ export function fixCandidates(
           cost: 1,
           apply: (s) => setMission(s, { maxQThrottle: { aboveQPa: 20000, throttle: 0.7 } }),
         });
+      for (const [k, cost] of [[1.25, 1.5], [1.5, 2.5]] as const)
+        if ((spec.structureScale ?? 1) < k)
+          out.push({
+            id: `stronger-${k}`,
+            title: `Reinforce the structure: ${k}× the strength (heavier)`,
+            roscoe: k < 1.4 ? 'Make the body stronger' : 'Make the body extra strong',
+            cost,
+            apply: (s) => setStructure(s, k),
+          });
       kickLater(10, 2);
       moreEngines(2, 2);
       moreEngines(4, 3);
@@ -269,6 +282,7 @@ export function fixCandidates(
       break;
     }
 
+    case 'orbitShort':
     case 'moonShort': {
       const landing = spec.stages.findIndex((s) => s.recovery === 'propulsive');
       if (landing >= 0)
@@ -383,6 +397,7 @@ export function findFixes(
       remainingDeltaVMS: o.remainingDeltaVMS,
       complete: !next,
       nextProblem: next,
+      control: fixControl(c.id),
     });
   }
   working.sort((a, b) => Number(b.complete) - Number(a.complete) || a.cost - b.cost || b.remainingDeltaVMS - a.remainingDeltaVMS);

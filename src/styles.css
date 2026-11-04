@@ -1731,3 +1731,661 @@ input {
   font-size: 48px;
   line-height: 110px;
 }
+
+/* ================= Mission Mode (Space Q) ================= */
+
+:root {
+  --sq-cream: #f6ebcb;
+  --sq-cream-2: #efe0b6;
+  --sq-ink: #1f2a22;
+  --sq-orange: #e2622b;
+  --sq-rust: #9e3b22;
+}
+
+button.brand {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  min-height: 44px;
+}
+
+.brand-logo {
+  height: 48px;
+  width: 48px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.mission-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-fun);
+}
+
+.mission-chip span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mission-chip b {
+  font-size: 18px;
+}
+
+.mission-chip small {
+  color: var(--amber);
+  font-size: 14px;
+}
+
+.speed-group {
+  display: inline-flex;
+  gap: inherit;
+  align-items: center;
+}
+
+/* Something new glows until you've had a look. */
+.fresh {
+  position: relative;
+  box-shadow: 0 0 0 3px var(--sq-orange), 0 0 18px rgba(226, 98, 43, 0.7);
+  border-radius: 12px;
+}
+
+.fresh::after {
+  content: 'NEW!';
+  position: absolute;
+  top: -10px;
+  right: -6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--sq-orange);
+  color: #fff;
+  font: 800 11px var(--font);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+
+/* Full screens: home, mission map, Skill Book */
+.sq-screen {
+  min-height: 100%;
+  background: var(--sq-cream);
+  color: var(--sq-ink);
+  font-family: var(--font-fun);
+  padding: 20px max(16px, env(safe-area-inset-left));
+  overflow-y: auto;
+  height: 100%;
+}
+
+.sq-home {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.sq-home-art {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sq-logo {
+  width: min(320px, 70vw);
+  border-radius: 24px;
+}
+
+.sq-logo.small {
+  width: 64px;
+  border-radius: 12px;
+}
+
+.sq-home-art .roscoe {
+  margin-top: -30px;
+}
+
+.sq-home-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(360px, 100%);
+}
+
+.sq-cadet {
+  font-size: 18px;
+}
+
+.sq-big,
+.sq-small {
+  border-radius: 18px;
+  border: 3px solid var(--sq-ink);
+  background: #fff8e6;
+  color: var(--sq-ink);
+  font: 800 24px var(--font-fun);
+  padding: 14px 20px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 56px;
+}
+
+.sq-big small {
+  font: 600 14px var(--font-fun);
+  opacity: 0.75;
+}
+
+.sq-big.primary {
+  background: var(--sq-orange);
+  color: #fff;
+  border-color: var(--sq-rust);
+  box-shadow: 0 6px 0 var(--sq-rust);
+}
+
+.sq-small {
+  font-size: 17px;
+  padding: 8px 14px;
+  border-width: 2px;
+  min-height: 44px;
+  flex-direction: row;
+  justify-content: center;
+}
+
+.stars {
+  letter-spacing: 2px;
+  color: rgba(31, 42, 34, 0.25);
+  font-size: 18px;
+}
+
+.stars .on {
+  color: #f2a900;
+  text-shadow: 0 1px 0 var(--sq-rust);
+}
+
+.stars.big {
+  font-size: 44px;
+}
+
+.sq-map-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.sq-map-head h2 {
+  margin: 0;
+  flex: 1;
+}
+
+.sq-chapter h2 {
+  font-size: 22px;
+  margin: 18px 0 10px;
+  color: var(--sq-rust);
+}
+
+.sq-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.sq-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 8px 10px;
+  border-radius: 18px;
+  border: 3px solid var(--sq-ink);
+  background: #fff8e6;
+  color: var(--sq-ink);
+  font-family: var(--font-fun);
+  cursor: pointer;
+  min-height: 150px;
+  text-align: center;
+}
+
+.sq-tile b {
+  font-size: 16px;
+}
+
+.sq-tile.done {
+  background: #fff3cf;
+  border-color: var(--sq-orange);
+}
+
+.sq-tile.locked {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.sq-tile-n {
+  position: absolute;
+  top: 6px;
+  left: 10px;
+  font-weight: 800;
+  opacity: 0.6;
+}
+
+.sq-patch {
+  font-size: 34px;
+  line-height: 1.1;
+}
+
+.sq-patch.big {
+  font-size: 56px;
+}
+
+.sq-kind {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.sq-real {
+  font-size: 15px;
+  color: var(--sq-rust);
+}
+
+.sq-coming {
+  margin-top: 22px;
+  opacity: 0.75;
+}
+
+/* Briefing and debrief cards */
+.sq-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(7, 29, 66, 0.6);
+  padding: 16px;
+}
+
+.sq-card {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 20px 22px;
+  border-radius: 24px;
+  background: var(--sq-cream);
+  color: var(--sq-ink);
+  border: 4px solid var(--sq-ink);
+  font-family: var(--font-fun);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: pop 0.4s ease-out;
+}
+
+.sq-card h2 {
+  margin: 2px 0;
+  font-size: 26px;
+}
+
+.sq-card-top,
+.sq-talk {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sq-talk {
+  margin: 12px 0;
+  align-items: flex-start;
+}
+
+.sq-talk.small {
+  align-items: center;
+}
+
+.sq-bubble {
+  position: relative;
+  flex: 1;
+  background: #fff;
+  border: 3px solid var(--sq-ink);
+  border-radius: 18px;
+  padding: 10px 14px;
+  font-size: 19px;
+  margin: 0;
+}
+
+.sq-bubble p {
+  margin: 4px 0;
+}
+
+.sq-goals {
+  display: grid;
+  gap: 6px;
+  font-size: 18px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--sq-cream-2);
+}
+
+.sq-goals .stars {
+  font-size: 22px;
+}
+
+.sq-new {
+  margin-top: 10px;
+  font-weight: 700;
+  color: var(--sq-rust);
+}
+
+.sq-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.sq-card.debrief {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  width: min(560px, calc(100% - 32px));
+}
+
+.sq-starlist {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  font-size: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.sq-starlist li {
+  opacity: 0.55;
+}
+
+.sq-starlist li.on {
+  opacity: 1;
+  font-weight: 700;
+}
+
+.sq-learned {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #fff8e6;
+  border: 2px dashed var(--sq-orange);
+}
+
+.sq-learned p {
+  margin: 4px 0 0;
+  font-size: 17px;
+}
+
+.sq-skill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.sq-skill {
+  text-align: left;
+  padding: 14px;
+  border-radius: 18px;
+  border: 3px solid var(--sq-ink);
+  background: #fff8e6;
+  color: var(--sq-ink);
+  font-family: var(--font-fun);
+  cursor: pointer;
+}
+
+.sq-skill b {
+  display: block;
+  font-size: 18px;
+  margin: 4px 0;
+}
+
+.sq-skill p {
+  margin: 0;
+  font-size: 15px;
+}
+
+.sq-skill.locked {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Coach: Did's bubble and the pulsing ring around what to tap */
+.coach {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 55;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: min(420px, calc(100% - 32px));
+  pointer-events: none;
+  animation: pop 0.3s ease-out;
+}
+
+.coach-bubble {
+  pointer-events: auto;
+  background: var(--sq-cream);
+  color: var(--sq-ink);
+  border: 3px solid var(--sq-ink);
+  border-radius: 18px 18px 18px 4px;
+  padding: 10px 14px;
+  font-family: var(--font-fun);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.coach-bubble b {
+  font-size: 13px;
+  color: var(--sq-rust);
+}
+
+.coach-bubble p {
+  margin: 2px 0 6px;
+  font-size: 19px;
+}
+
+.coach.transient .coach-bubble p {
+  margin-bottom: 0;
+}
+
+.coach-ring {
+  position: fixed;
+  z-index: 54;
+  border: 4px solid var(--sq-orange);
+  border-radius: 16px;
+  pointer-events: none;
+  animation: coach-pulse 1.2s ease-in-out infinite;
+}
+
+.coach-hand {
+  position: absolute;
+  bottom: -38px;
+  left: 50%;
+  font-size: 32px;
+  animation: coach-tap 1.2s ease-in-out infinite;
+}
+
+@keyframes coach-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(226, 98, 43, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(226, 98, 43, 0);
+  }
+}
+
+@keyframes coach-tap {
+  0%,
+  100% {
+    transform: translate(-50%, 0);
+  }
+  50% {
+    transform: translate(-50%, -8px);
+  }
+}
+
+/* Failure card that teaches */
+.result-card.lesson {
+  text-align: left;
+  width: min(640px, calc(100% - 32px));
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  padding: 16px 20px;
+  z-index: 15;
+}
+
+.result-card.lesson .result-actions {
+  margin-top: 8px;
+}
+
+.lesson-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.result-card.lesson h2 {
+  font-size: 24px;
+}
+
+.result-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.lesson-meter {
+  margin: 12px 0;
+}
+
+.lm-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 18px;
+}
+
+.lm-head .bad {
+  color: #ff8a8a;
+}
+
+.lm-head .ok {
+  color: var(--green);
+}
+
+.lm-bar {
+  position: relative;
+  height: 22px;
+  margin-top: 4px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.lm-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 11px;
+}
+
+.lm-fill.bad {
+  background: #ff5a5a;
+}
+
+.lm-fill.ok {
+  background: var(--green);
+}
+
+.lm-line {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 4px;
+  margin-left: -2px;
+  background: #fff;
+  border-radius: 2px;
+}
+
+.lm-line em {
+  position: absolute;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 13px;
+  font-style: normal;
+  color: var(--ink-dim);
+}
+
+.lesson-why {
+  margin-top: 20px;
+}
+
+.lesson-why p {
+  margin: 2px 0;
+  font-size: 17px;
+}
+
+.lesson-fixes ul {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.lesson-fixes li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 17px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.lesson-fixes li .btn {
+  flex-shrink: 0;
+}
+
+.lesson-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--sq-cream);
+  color: var(--sq-ink);
+  font-size: 18px;
+}
+
+.lesson-hint .btn {
+  margin-top: 6px;
+}
+
+.lesson-skill {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: var(--ink-dim);
+}
+
+@media (max-width: 700px) {
+  .sq-home {
+    gap: 16px;
+  }
+  .mission-chip b {
+    font-size: 15px;
+  }
+}

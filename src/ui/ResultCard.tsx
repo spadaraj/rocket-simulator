@@ -1,7 +1,11 @@
 import type { ReactNode } from 'react';
 import type { FixResult } from '../physics/fixes';
 import type { MissionStep } from '../physics/mission';
+import type { ControlId } from '../physics/controls';
+import { SKILLS } from '../missions/skills';
+import type { Lesson, Meter } from './lessons';
 import type { Feedback } from './messages';
+import { Did } from './mission/Characters';
 import { canSpeak, speak } from './speech';
 
 export interface FixState {
@@ -43,7 +47,7 @@ interface CardProps {
   badge?: ReactNode;
 }
 
-const STEP_ICON: Record<MissionStep['id'], string> = { ascent: '🚀', systems: '🎧', recovery: '🪂', moon: '🌕', reentry: '🔥' };
+const STEP_ICON: Record<MissionStep['id'], string> = { ascent: '🚀', systems: '🎧', recovery: '🪂', raise: '🛰️', moon: '🌕', reentry: '🔥' };
 const STATUS_ICON: Record<MissionStep['status'], string> = { ok: '✅', fail: '❌', warn: '⚠️', skipped: '➖' };
 
 function Steps({ steps, roscoe }: { steps: MissionStep[]; roscoe: boolean }) {
@@ -162,6 +166,119 @@ export function EngineerResult({ fb, fix, steps, replays, onAgain, onTryFix }: C
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ---------- Failures that teach ----------
+
+const SCALE: Record<string, number> = { MN: 1e-6, kPa: 1e-3 };
+
+function MeterBar({ meter }: { meter: Meter }) {
+  const k = SCALE[meter.unit] ?? 1;
+  const top = Math.max(meter.value, meter.limit) * 1.15 || 1;
+  const bad = meter.want === 'below' ? meter.value > meter.limit : meter.value < meter.limit;
+  const fmt = (x: number) => (x * k).toLocaleString(undefined, { maximumFractionDigits: x * k < 10 ? 1 : 0 });
+  return (
+    <div className="lesson-meter" aria-label={`${meter.label}: ${fmt(meter.value)} ${meter.unit}, ${meter.limitLabel} ${fmt(meter.limit)} ${meter.unit}`}>
+      <div className="lm-head">
+        <span>
+          {meter.emoji} {meter.label}
+        </span>
+        <b className={bad ? 'bad' : 'ok'}>
+          {fmt(meter.value)} {meter.unit}
+        </b>
+      </div>
+      <div className="lm-bar">
+        <span className={`lm-fill ${bad ? 'bad' : 'ok'}`} style={{ width: `${(meter.value / top) * 100}%` }} />
+        <span className="lm-line" style={{ left: `${(meter.limit / top) * 100}%` }}>
+          <em>
+            {meter.limitLabel}: {fmt(meter.limit)} {meter.unit}
+          </em>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+interface LessonProps {
+  lesson: Lesson;
+  fix?: FixState;
+  steps: MissionStep[];
+  replays: { label: string; onClick: () => void }[];
+  onAgain: () => void;
+  onTryFix: (f: FixResult) => void;
+  onShowMe: (c: ControlId) => void;
+  /** Mission Mode: only fixes using these controls are offered. */
+  controls?: Set<ControlId>;
+  /** Mission Mode: Did's hint for this try, if any. */
+  hint?: ReactNode;
+}
+
+export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onShowMe, controls, hint }: LessonProps) {
+  const allowed = (c?: ControlId) => !controls || (!!c && controls.has(c));
+  const fixes = lesson.fixes.filter((f) => allowed(f.control));
+  const tested = fix?.status === 'done' ? fix.fixes.find((f) => allowed(f.control)) : undefined;
+  const skill = SKILLS[lesson.skill];
+  const readAloud = `${lesson.what} ${lesson.why.join(' ')} How to fix it: ${fixes.map((f) => f.text).join(' ')}`;
+  return (
+    <div className="result-card roscoe lose lesson">
+      <div className="lesson-head">
+        <Did size={84} mood="oops" />
+        <div>
+          <div className="result-kicker">What happened</div>
+          <h2>{lesson.what}</h2>
+        </div>
+      </div>
+      {lesson.meter && <MeterBar meter={lesson.meter} />}
+      <div className="lesson-why">
+        <div className="result-kicker">🔬 Why</div>
+        {lesson.why.map((w) => (
+          <p key={w}>{w}</p>
+        ))}
+      </div>
+      {hint}
+      <div className="lesson-fixes">
+        <div className="result-kicker">🔧 How you can fix it</div>
+        <ul>
+          {fixes.map((f) => (
+            <li key={f.text}>
+              <span>{f.text}</span>
+              <button className="btn small" onClick={() => onShowMe(f.control)}>
+                👉 Show me
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {steps.length > 1 && <Steps steps={steps} roscoe />}
+      <div className="result-actions">
+        {canSpeak && (
+          <button className="btn big" onClick={() => speak(readAloud)} aria-label="Read aloud">
+            🔊 Read to me
+          </button>
+        )}
+        {tested && (
+          <button className="btn big" onClick={() => onTryFix(tested)} title={tested.roscoe}>
+            🧑‍🚀 Let Did fix it
+          </button>
+        )}
+        <button className="btn big primary" onClick={onAgain}>
+          🚀 Fly again
+        </button>
+      </div>
+      <p className="lesson-skill">
+        📖 Skill Book: {skill.emoji} {skill.title}
+      </p>
+      {replays.length > 1 && (
+        <div className="result-replays">
+          {replays.map((r) => (
+            <button key={r.label} className="btn small" onClick={r.onClick}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
