@@ -385,7 +385,7 @@ export default function App() {
     const earned = won ? 1 + starChecks.filter(Boolean).length : 0;
     const best = Math.max(earned, progress.stars[active!.id] ?? 0);
     if (won && best > (progress.stars[active!.id] ?? 0)) {
-      const next = { stars: { ...progress.stars, [active!.id]: best } };
+      const next = { ...progress, stars: { ...progress.stars, [active!.id]: best } };
       setProgress(next);
       saveProgress(next);
     }
@@ -459,7 +459,14 @@ export default function App() {
 
   if (screen === 'home')
     return <Home progress={progress} onMissions={() => setScreen('map')} onSandbox={goSandbox} onSkills={() => setScreen('skills')} />;
-  if (screen === 'map') return <MissionMap progress={progress} onPlay={startMission} onHome={() => setScreen('home')} />;
+  if (screen === 'map') return (
+      <MissionMap
+        progress={progress}
+        onPlay={startMission}
+        onHome={() => setScreen('home')}
+        onProgress={(p) => (setProgress(p), saveProgress(p))}
+      />
+    );
   if (screen === 'skills') return <SkillBook progress={progress} onBack={() => setScreen('home')} />;
 
   // Mission Mode: Did's hint grows with each failed try; on the third, he offers to show the fix.

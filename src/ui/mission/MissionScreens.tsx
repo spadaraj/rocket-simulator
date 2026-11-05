@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CONTROL_INFO } from '../../missions/controlInfo';
 import { CHAPTERS, MISSIONS } from '../../missions/missions';
-import { isUnlocked, learnedSkills, rank, totalStars, type Progress } from '../../missions/progress';
+import { furthestOpen, isUnlocked, learnedSkills, rank, readSaveCode, saveCode, totalStars, type Progress } from '../../missions/progress';
 import { SKILLS, type SkillId } from '../../missions/skills';
 import type { Mission } from '../../missions/types';
 import { canSpeak, speak } from '../speech';
@@ -61,9 +61,29 @@ export function Home({ progress, onMissions, onSandbox, onSkills }: { progress: 
 
 // ---------- Mission map ----------
 
-export function MissionMap({ progress, onPlay, onHome }: { progress: Progress; onPlay: (m: Mission) => void; onHome: () => void }) {
+/** Two saves together: the best stars for each mission, and the furthest grown-up opening. */
+export function mergeProgress(a: Progress, b: Progress): Progress {
+  const stars = { ...a.stars };
+  for (const [id, n] of Object.entries(b.stars)) stars[id] = Math.max(n, stars[id] ?? 0);
+  const openTo = Math.max(a.openTo ?? 0, b.openTo ?? 0);
+  return openTo > 0 ? { stars, openTo } : { stars };
+}
+
+export function MissionMap({
+  progress,
+  onPlay,
+  onHome,
+  onProgress,
+}: {
+  progress: Progress;
+  onPlay: (m: Mission) => void;
+  onHome: () => void;
+  onProgress: (p: Progress) => void;
+}) {
+  const [saving, setSaving] = useState(false);
   return (
     <div className="sq-screen sq-map">
+      {saving && <SavePanel progress={progress} onProgress={onProgress} onClose={() => setSaving(false)} />}
       <div className="sq-map-head">
         <button className="sq-small" onClick={onHome}>
           ← Home
@@ -72,6 +92,9 @@ export function MissionMap({ progress, onPlay, onHome }: { progress: Progress; o
         <span className="sq-cadet">
           {rank(progress)} Roscoe · {totalStars(progress)} ★
         </span>
+        <button className="sq-small sq-save-btn" onClick={() => setSaving(true)}>
+          🔑 Save code
+        </button>
       </div>
       {CHAPTERS.map((ch) => (
         <section key={ch.n} className="sq-chapter">
@@ -97,6 +120,93 @@ export function MissionMap({ progress, onPlay, onHome }: { progress: Progress; o
         </section>
       ))}
       <p className="sq-coming">🪐 More chapters coming: the giant planets, Pluto, and Space Q’s big dream!</p>
+    </div>
+  );
+}
+
+// ---------- Save codes (for grown-ups) ----------
+
+function SavePanel({ progress, onProgress, onClose }: { progress: Progress; onProgress: (p: Progress) => void; onClose: () => void }) {
+  const code = saveCode(progress);
+  const [typed, setTyped] = useState('');
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [startAt, setStartAt] = useState(furthestOpen(progress));
+  const [copied, setCopied] = useState(false);
+
+  const load = () => {
+    const p = readSaveCode(typed);
+    if (!p) return setNote({ ok: false, text: 'That code doesn’t look right. Check each letter and try again.' });
+    const merged = mergeProgress(progress, p);
+    onProgress(merged);
+    setStartAt(furthestOpen(merged));
+    setNote({ ok: true, text: `Loaded! Missions open up to ${furthestOpen(merged) + 1}.` });
+    setTyped('');
+  };
+  const open = () => {
+    const merged = mergeProgress(progress, { stars: {}, openTo: startAt });
+    onProgress(merged);
+    setNote({ ok: true, text: `Done! Missions 1 to ${furthestOpen(merged) + 1} are open.` });
+  };
+  const copy = () => {
+    navigator.clipboard?.writeText(code).then(
+      () => setCopied(true),
+      () => {},
+    );
+  };
+
+  return (
+    <div className="sq-modal" onClick={onClose}>
+      <div className="sq-card sq-save" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Save code">
+        <h2>🔑 Save code</h2>
+        <p className="sq-save-hint">
+          Progress saves by itself in this browser. To carry it to another device or browser, write this code down and type it in there.
+        </p>
+        <div className="sq-save-code">
+          <code>{code}</code>
+          <button className="sq-small" onClick={copy}>
+            {copied ? '✅ Copied' : '📋 Copy'}
+          </button>
+        </div>
+
+        <h3>Got a code?</h3>
+        <div className="sq-save-row">
+          <input
+            value={typed}
+            onChange={(e) => (setTyped(e.target.value), setNote(null))}
+            onKeyDown={(e) => e.key === 'Enter' && load()}
+            placeholder="Q-…"
+            aria-label="Save code to load"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <button className="sq-small" onClick={load} disabled={!typed.trim()}>
+            Load
+          </button>
+        </div>
+
+        <h3>For grown-ups: start from a mission</h3>
+        <p className="sq-save-hint">Already played on another device? Open every mission up to this one. Stars stay as they are.</p>
+        <div className="sq-save-row">
+          <select value={startAt} onChange={(e) => (setStartAt(Number(e.target.value)), setNote(null))} aria-label="Open missions up to">
+            {MISSIONS.map((m, i) => (
+              <option key={m.id} value={i}>
+                Mission {i + 1}: {m.title}
+              </option>
+            ))}
+          </select>
+          <button className="sq-small" onClick={open}>
+            Open
+          </button>
+        </div>
+
+        {note && <p className={`sq-save-note ${note.ok ? 'ok' : 'bad'}`}>{note.text}</p>}
+        <div className="sq-save-done">
+          <button className="sq-small" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
