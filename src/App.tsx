@@ -22,6 +22,7 @@ import { sampleAt, usePlayback } from './ui/playback';
 import { EngineerResult, RoscoeResult, type FixState } from './ui/ResultCard';
 import { RocketThumb } from './ui/RocketThumb';
 import { RoscoeBuilder } from './ui/RoscoeBuilder';
+import { PartsBox } from './ui/PartsBox';
 import { RoscoeDials } from './ui/RoscoeDials';
 import { RaiseView } from './ui/RaiseView';
 import { fmtMeter, lessonFor, type Meter } from './ui/lessons';
@@ -720,6 +721,7 @@ export default function App() {
               </div>
             </div>
           )}
+          {roscoe && !inMission && <PartsBox spec={spec} setSpec={setSpec} rockets={[...presets.filter((p) => p.id !== 'a1-39-as-drawn'), ...myRockets]} />}
           {inMission && (
             <MissionCard mission={active!} spec={spec} liftoffTWR={record.summary.liftoffTWR} best={progress.stars[active!.id] ?? 0} lastTry={lastTry} />
           )}
@@ -740,6 +742,7 @@ export default function App() {
               controls={controls}
               fresh={fresh}
               changed={didFix ? new Set(didFix.changes.flatMap((c) => (c.control ? [c.control] : []))) : undefined}
+              unlimited={!inMission}
             />
           ) : (
             <EngineerBuilder

@@ -52,7 +52,7 @@ interface Props {
 
 const fmt = (x: number, d = 0) => x.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 
-function Num(props: { value: number; step: number; min: number; max: number; onChange: (v: number) => void; label: string }) {
+function Num(props: { value: number; step: number; min: number; max?: number; onChange: (v: number) => void; label: string }) {
   return (
     <input
       className="num"
@@ -64,7 +64,7 @@ function Num(props: { value: number; step: number; min: number; max: number; onC
       max={props.max}
       onChange={(e) => {
         const v = Number(e.target.value);
-        if (Number.isFinite(v) && v >= props.min && v <= props.max) props.onChange(v);
+        if (Number.isFinite(v) && v >= props.min && v <= (props.max ?? Infinity)) props.onChange(v);
       }}
     />
   );
@@ -114,7 +114,7 @@ export function EngineerBuilder(p: Props) {
           <button className="btn small" onClick={p.onAutoSize} disabled={p.autoSizing}>
             {p.autoSizing ? 'Sizing…' : spec.mission.target === 'orbit' ? 'Auto-size for orbit' : 'Auto-size for the Moon'}
           </button>
-          <button className="btn small" onClick={() => setSpec(addStage(spec, catalog))} disabled={spec.stages.length >= 4}>
+          <button className="btn small" onClick={() => setSpec(addStage(spec, catalog))}>
             Add stage
           </button>
           <button className="btn small" onClick={p.onReset}>
@@ -182,9 +182,9 @@ export function EngineerBuilder(p: Props) {
                       </select>
                     )}
                   </td>
-                  <td>{eng && <Num label="Engine count" value={eng.ref.count ?? 1} step={1} min={0} max={40} onChange={(v) => setSpec(setEngineCount(spec, catalog, i, v))} />}</td>
-                  <td>{tank && <Num label="Tank diameter" value={tank.part.diameterM ?? 0} step={0.5} min={1} max={20} onChange={(v) => setSpec(setTank(spec, catalog, i, { diameterM: v }))} />}</td>
-                  <td>{tank && <Num label="Tank length" value={tank.part.lengthM ?? 0} step={1} min={1} max={120} onChange={(v) => setSpec(setTank(spec, catalog, i, { lengthM: v }))} />}</td>
+                  <td>{eng && <Num label="Engine count" value={eng.ref.count ?? 1} step={1} min={0} onChange={(v) => setSpec(setEngineCount(spec, catalog, i, v))} />}</td>
+                  <td>{tank && <Num label="Tank diameter" value={tank.part.diameterM ?? 0} step={0.5} min={1} onChange={(v) => setSpec(setTank(spec, catalog, i, { diameterM: v }))} />}</td>
+                  <td>{tank && <Num label="Tank length" value={tank.part.lengthM ?? 0} step={1} min={1} onChange={(v) => setSpec(setTank(spec, catalog, i, { lengthM: v }))} />}</td>
                   <td>{tank && <Num label="Fill" value={Math.round(stageFill(spec, catalog, i) * 100)} step={1} min={1} max={100} onChange={(v) => setSpec(setFill(spec, catalog, i, v / 100))} />}</td>
                   <td className="mono">
                     {fmt(model.propellantKg / 1000)}
@@ -194,7 +194,7 @@ export function EngineerBuilder(p: Props) {
                   <td className="mono">{fmt(dvFor(i))}</td>
                   <td className={`mono ${ignitionTWR(i) < (i === 0 ? 1 : 0.4) ? 'warn' : ''}`}>{fmt(ignitionTWR(i), 2)}</td>
                   <td>
-                    <Num label="Fin size" value={finScale(spec, catalog, i)} step={0.25} min={0} max={3} onChange={(v) => setSpec(setFins(spec, catalog, i, v))} />
+                    <Num label="Fin size" value={finScale(spec, catalog, i)} step={0.25} min={0} onChange={(v) => setSpec(setFins(spec, catalog, i, v))} />
                   </td>
                   <td className="nowrap">
                     {i < spec.stages.length - 1 ? (
@@ -246,7 +246,7 @@ export function EngineerBuilder(p: Props) {
                 </select>
               </td>
               <td>
-                <Num label="Booster count" value={b?.count ?? 0} step={1} min={0} max={8} onChange={(v) => setSpec(setBoosters(spec, b?.part ?? 'srb-sls-5seg', v))} />
+                <Num label="Booster count" value={b?.count ?? 0} step={1} min={0} onChange={(v) => setSpec(setBoosters(spec, b?.part ?? 'srb-sls-5seg', v))} />
               </td>
               <td colSpan={8} className="muted">
                 Strap-ons on the first stage; separate at burnout.
@@ -284,7 +284,7 @@ export function EngineerBuilder(p: Props) {
                 Heat shield thickness (1 = standard; thicker is heavier)
               </td>
               <td colSpan={3}>
-                <Num label="Heat shield" value={spec.payload.heatShieldScale ?? 1} step={0.25} min={0.5} max={3} onChange={(v) => setSpec(setHeatShield(spec, v))} />
+                <Num label="Heat shield" value={spec.payload.heatShieldScale ?? 1} step={0.25} min={0.5} onChange={(v) => setSpec(setHeatShield(spec, v))} />
               </td>
             </tr>
           </tbody>

@@ -43,14 +43,14 @@ function replaceRef(spec: RocketSpec, i: number, index: number, ref: PartRef): R
 }
 
 /** Drop custom parts nothing refers to any more. */
-function prune(spec: RocketSpec): RocketSpec {
+export function prune(spec: RocketSpec): RocketSpec {
   if (!spec.customParts) return spec;
   const used = new Set(spec.stages.flatMap((s) => s.parts.map((p) => p.part)));
   const customParts = spec.customParts.filter((p) => used.has(p.id));
   return { ...spec, customParts: customParts.length ? customParts : undefined };
 }
 
-function nextCustomId(spec: RocketSpec, prefix = 'custom-tank-'): string {
+export function nextCustomId(spec: RocketSpec, prefix = 'custom-tank-'): string {
   let n = 1;
   const ids = new Set((spec.customParts ?? []).map((p) => p.id));
   while (ids.has(`${prefix}${n}`)) n++;
@@ -113,7 +113,7 @@ export function setEngine(spec: RocketSpec, catalog: Catalog, i: number, engineI
 export function setEngineCount(spec: RocketSpec, catalog: Catalog, i: number, count: number): RocketSpec {
   const e = stageEngine(spec, catalog, i);
   if (!e) return spec;
-  return replaceRef(spec, i, e.index, { ...e.ref, count: Math.max(0, Math.min(40, Math.round(count))) });
+  return replaceRef(spec, i, e.index, { ...e.ref, count: Math.max(0, Math.round(count)) });
 }
 
 export function setBoosters(spec: RocketSpec, part: string, count: number): RocketSpec {
@@ -128,7 +128,7 @@ export function setBoosters(spec: RocketSpec, part: string, count: number): Rock
       }
       return {
         ...s,
-        boosters: { part, count: Math.min(8, count), separate: 'onBurnout' as const, color: '#f4f6fa', recovery: s.boosters?.recovery },
+        boosters: { part, count: Math.round(count), separate: 'onBurnout' as const, color: '#f4f6fa', recovery: s.boosters?.recovery },
       };
     }),
   };
@@ -237,7 +237,7 @@ export function setBoosterRecovery(spec: RocketSpec, method: 'none' | 'parachute
 }
 
 export function setHeatShield(spec: RocketSpec, scale: number): RocketSpec {
-  return { ...spec, payload: { ...spec.payload, heatShieldScale: Math.max(0.5, Math.min(3, scale)) } };
+  return { ...spec, payload: { ...spec.payload, heatShieldScale: Math.max(0.5, scale) } };
 }
 
 // ---------- Free-design engines ----------
@@ -305,7 +305,7 @@ export function blankRocket(): RocketSpec {
   };
 }
 
-export type PayloadSlot = 'kick' | 'lander' | 'cargo' | 'service' | 'capsule' | 'fairing' | 'tower';
+export type PayloadSlot = 'kick' | 'lander' | 'cargo' | 'service' | 'capsule' | 'fairing' | 'tower' | 'orbiter';
 
 /** What can go in each payload slot, bottom of the payload to top. */
 export const PAYLOAD_SLOTS: { slot: PayloadSlot; label: string; roscoe: string; parts: string[] }[] = [
@@ -326,6 +326,8 @@ export const PAYLOAD_SLOTS: { slot: PayloadSlot; label: string; roscoe: string; 
   { slot: 'capsule', label: 'Capsule', roscoe: '👩‍🚀 Capsule', parts: ['apollo-cm', 'a139-command-module', 'orion-cm', 'dragon-cargo'] },
   { slot: 'fairing', label: 'Nose fairing', roscoe: '🥚 Nose cover', parts: ['fairing-5m'] },
   { slot: 'tower', label: 'Escape tower', roscoe: '🗼 Escape tower', parts: ['apollo-les', 'a139-escape-tower', 'orion-las'] },
+  /** Sandbox only: rides on the side of the top stage, like the real Shuttle. */
+  { slot: 'orbiter', label: 'Space Shuttle', roscoe: '🛩️ Space Shuttle', parts: ['shuttle-orbiter'] },
 ];
 
 const SLOT_COLORS: Partial<Record<PayloadSlot, string>> = { service: '#f4f6fa', capsule: '#c9d1dc', fairing: '#f4f6fa', tower: '#f4f6fa' };

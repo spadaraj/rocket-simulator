@@ -2658,3 +2658,154 @@ button.brand {
   font-style: normal;
   color: var(--ink-dim);
 }
+
+/* Parts Box: take stages and parts from any rocket (Sandbox) */
+.parts-box {
+  max-width: 1068px;
+  margin: 16px auto 0;
+  padding: 10px 14px 12px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 2px solid var(--amber);
+  font-family: var(--font-fun);
+}
+
+.pb-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.pb-head small {
+  flex: 1;
+  font-size: 15px;
+  color: var(--ink-dim);
+}
+
+.pb-rockets {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 2px 6px;
+}
+
+.pb-rocket {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 84px;
+  padding: 6px 8px;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.pb-rocket.on {
+  border-color: var(--amber);
+  background: rgba(255, 176, 46, 0.18);
+}
+
+.pb-group {
+  margin-top: 8px;
+}
+
+.pb-label {
+  font-size: 15px;
+  color: var(--ink-dim);
+  margin-bottom: 4px;
+}
+
+.pb-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pb-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 96px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.pb-card small {
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.pb-card.on {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(60, 207, 122, 0.4);
+}
+
+.pb-where {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(60, 207, 122, 0.16);
+  font-size: 17px;
+}
+
+.pb-where-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.pb-note {
+  margin: 8px 0 0;
+  font-size: 16px;
+  color: var(--green);
+}
+
+.rb-typeable {
+  border: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  cursor: text;
+}
+
+.rb-type {
+  width: 6em;
+  border: 2px solid var(--amber);
+  border-radius: 8px;
+  background: var(--bp-deep);
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .parts-box {
+    margin: 12px 16px 0;
+  }
+}

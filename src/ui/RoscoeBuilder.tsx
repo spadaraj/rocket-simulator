@@ -27,7 +27,7 @@ import {
   stageTank,
   tuneEngine,
 } from '../physics/edit';
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useState } from 'react';
 import type { ControlId } from '../physics/controls';
 import { engineWarnings, worstLevel } from '../physics/design';
 import { goesToMoon } from '../physics/raise';
@@ -60,6 +60,8 @@ interface Props {
   fresh?: Set<ControlId>;
   /** Controls Did just changed, which glow too. */
   changed?: Set<ControlId>;
+  /** Sandbox: no caps on how much of anything, and numbers can be typed in. */
+  unlimited?: boolean;
 }
 
 const Gate = createContext<{ controls?: Set<ControlId>; fresh?: Set<ControlId>; changed?: Set<ControlId> }>({});
@@ -108,6 +110,7 @@ const MODULE_NAMES: Record<string, string> = {
   'satellite-small': 'Little satellite',
   'satellite-heavy': 'Big satellite',
   'starship-cargo': '100 t of cargo',
+  'shuttle-orbiter': 'Space Shuttle orbiter',
   'apollo-sm': 'Apollo',
   'a139-service-module': 'A1-39',
   'orion-esm': 'Orion',
@@ -166,16 +169,55 @@ function Toggle({ label, on, onChange, hint, id, mark = true }: { label: string;
   );
 }
 
-function Stepper({ label, value, onMinus, onPlus, id, mark = true }: { label: string; value: string; onMinus: () => void; onPlus: () => void; id?: ControlId; mark?: boolean }) {
+interface StepperProps {
+  label: string;
+  value: string;
+  onMinus: () => void;
+  onPlus: () => void;
+  id?: ControlId;
+  mark?: boolean;
+  /** Sandbox: tap the value to type any amount. */
+  typed?: { value: number; unit?: string; onSet: (n: number) => void };
+}
+
+function Stepper({ label, value, onMinus, onPlus, id, mark = true, typed }: StepperProps) {
   const g = useGate(id);
+  const [editing, setEditing] = useState<string | null>(null);
   if (!g.show) return null;
+  const commit = () => {
+    const n = Number(editing);
+    if (typed && editing !== null && editing.trim() !== '' && Number.isFinite(n) && n >= 0) typed.onSet(n);
+    setEditing(null);
+  };
   return (
     <div className={`rb-row${g.cls}`} data-coach={mark ? id : undefined}>
       <span className="rb-label">{label}</span>
       <button className="rb-btn" onClick={onMinus} aria-label={`${label} less`}>
         −
       </button>
-      <span className="rb-value">{value}</span>
+      {typed && editing !== null ? (
+        <input
+          className="rb-value rb-type"
+          type="number"
+          inputMode="decimal"
+          min={0}
+          autoFocus
+          value={editing}
+          aria-label={`${label}${typed.unit ? ` (${typed.unit})` : ''}`}
+          onChange={(e) => setEditing(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') setEditing(null);
+          }}
+        />
+      ) : typed ? (
+        <button className="rb-value rb-typeable" onClick={() => setEditing(String(Math.round(typed.value * 100) / 100))} title="Tap to type any amount">
+          {value} ✏️
+        </button>
+      ) : (
+        <span className="rb-value">{value}</span>
+      )}
       <button className="rb-btn" onClick={onPlus} aria-label={`${label} more`}>
         +
       </button>
@@ -244,6 +286,9 @@ export function RoscoeBuilder(p: Props) {
   const moonDv = LEO_BUDGET_MS + TLI_BUDGET_MS;
   const meterMax = moonDv * 1.3;
   const canLift = p.liftoffTWR > 1;
+  const free = !!p.unlimited;
+  /** Mission caps; the Sandbox has none. */
+  const cap = (n: number, max: number) => (free ? n : Math.min(max, n));
 
   const cycle = <T,>(list: T[], current: T, dir: number) =>
     list[(list.indexOf(current) + dir + list.length) % list.length];
@@ -331,7 +376,7 @@ export function RoscoeBuilder(p: Props) {
             onNext={() => setSpec(setMission(spec, { targetOrbitAltitudeM: 1000 * (HEIGHTS_KM.find((h) => h > heightKm) ?? HEIGHTS_KM[HEIGHTS_KM.length - 1]) }))}
           />
           {can('payload') && <div className="rb-title small">On top</div>}
-          {PAYLOAD_SLOTS.map((slot) => {
+          {PAYLOAD_SLOTS.filter((slot) => slot.slot !== 'orbiter' || !p.controls).map((slot) => {
             const current = payloadSlot(spec, slot.slot) ?? null;
             const options: (string | null)[] = [null, ...slot.parts.filter((id) => id === current || !PART_CONTROL[id] || can(PART_CONTROL[id]))];
             return (
@@ -345,6 +390,16 @@ export function RoscoeBuilder(p: Props) {
               />
             );
           })}
+          {free ? (
+            <Stepper
+              id="heatShield"
+              label="Heat shield"
+              value={`${Math.round((spec.payload.heatShieldScale ?? 1) * 100) / 100}× thick`}
+              onMinus={() => setSpec(setHeatShield(spec, (spec.payload.heatShieldScale ?? 1) / 1.25))}
+              onPlus={() => setSpec(setHeatShield(spec, (spec.payload.heatShieldScale ?? 1) * 1.25))}
+              typed={{ value: spec.payload.heatShieldScale ?? 1, unit: '× thick', onSet: (n) => setSpec(setHeatShield(spec, n)) }}
+            />
+          ) : (
           <Chooser
             id="heatShield"
             label="Heat shield"
@@ -352,11 +407,12 @@ export function RoscoeBuilder(p: Props) {
             onPrev={() => setSpec(setHeatShield(spec, cycle(SHIELDS, SHIELDS.find((x) => Math.abs(x.scale - (spec.payload.heatShieldScale ?? 1)) < 0.01) ?? SHIELDS[0], -1).scale))}
             onNext={() => setSpec(setHeatShield(spec, cycle(SHIELDS, SHIELDS.find((x) => Math.abs(x.scale - (spec.payload.heatShieldScale ?? 1)) < 0.01) ?? SHIELDS[0], 1).scale))}
           />
+          )}
           <Chooser id="comeHome" label="🏠 Coming home" value={angleChoice.label} onPrev={() => setAngle(-1)} onNext={() => setAngle(1)} />
         </div>
         )}
 
-        {spec.stages.length < 4 && can('addStage') && (
+        {(free || spec.stages.length < 4) && can('addStage') && (
           <button className={`rb-add${fresh('addStage')}`} data-coach="addStage" onClick={() => setSpec(addStage(spec, catalog))}>
             ➕ Add a stage on top
           </button>
@@ -394,7 +450,8 @@ export function RoscoeBuilder(p: Props) {
                     label="How many"
                     value={String(eng.ref.count ?? 1)}
                     onMinus={() => setSpec(setEngineCount(spec, catalog, i, (eng.ref.count ?? 1) - 1))}
-                    onPlus={() => setSpec(setEngineCount(spec, catalog, i, (eng.ref.count ?? 1) + 1))}
+                    onPlus={() => setSpec(setEngineCount(spec, catalog, i, cap((eng.ref.count ?? 1) + 1, Math.max(40, eng.ref.count ?? 1))))}
+                    typed={free ? { value: eng.ref.count ?? 1, unit: 'engines', onSet: (n) => setSpec(setEngineCount(spec, catalog, i, n)) } : undefined}
                   />
                   <Tinker spec={spec} setSpec={setSpec} i={i} />
                 </>
@@ -406,7 +463,8 @@ export function RoscoeBuilder(p: Props) {
                   label="Fuel tank"
                   value={`${(tank.part.lengthM ?? 0) < 10 ? (Math.round((tank.part.lengthM ?? 0) * 10) / 10).toString() : Math.round(tank.part.lengthM ?? 0)} m${fill < 0.99 ? ` · ${Math.round(fill * 100)}% full` : ''}`}
                   onMinus={() => setSpec(setTank(spec, catalog, i, { lengthM: Math.max(3, (tank.part.lengthM ?? 10) * 0.8) }))}
-                  onPlus={() => setSpec(setTank(spec, catalog, i, { lengthM: Math.min(90, (tank.part.lengthM ?? 10) * 1.25) }))}
+                  onPlus={() => setSpec(setTank(spec, catalog, i, { lengthM: cap((tank.part.lengthM ?? 10) * 1.25, 90) }))}
+                  typed={free ? { value: tank.part.lengthM ?? 10, unit: 'm long', onSet: (n) => setSpec(setTank(spec, catalog, i, { lengthM: Math.max(1, n) })) } : undefined}
                 />
               )}
               {i === 0 && (
@@ -436,7 +494,12 @@ export function RoscoeBuilder(p: Props) {
                   value={`${Math.round((st.landingReserveKg ?? 0) / 1000)} t`}
                   onMinus={() => setSpec(setRecovery(spec, i, 'propulsive', Math.max(0, (st.landingReserveKg ?? 0) - p.vehicle.stages[i].propellantKg * RESERVE_STEP_SHARE)))}
                   onPlus={() =>
-                    setSpec(setRecovery(spec, i, 'propulsive', Math.min(p.vehicle.stages[i].propellantKg * 0.6, (st.landingReserveKg ?? 0) + p.vehicle.stages[i].propellantKg * RESERVE_STEP_SHARE)))
+                    setSpec(setRecovery(spec, i, 'propulsive', Math.min(p.vehicle.stages[i].propellantKg * (free ? 1 : 0.6), (st.landingReserveKg ?? 0) + p.vehicle.stages[i].propellantKg * RESERVE_STEP_SHARE)))
+                  }
+                  typed={
+                    free
+                      ? { value: (st.landingReserveKg ?? 0) / 1000, unit: 'tonnes', onSet: (n) => setSpec(setRecovery(spec, i, 'propulsive', Math.min(p.vehicle.stages[i].propellantKg, n * 1000))) }
+                      : undefined
                   }
                 />
               )}
@@ -448,13 +511,24 @@ export function RoscoeBuilder(p: Props) {
                     on={!!spec.mission.maxQThrottle}
                     onChange={(on) => setSpec(setMission(spec, { maxQThrottle: on ? { aboveQPa: 25000, throttle: 0.6 } : undefined }))}
                   />
-                  <Chooser
-                    id="stronger"
-                    label="💪 Body"
-                    value={strength.label}
-                    onPrev={() => setSpec(setStructure(spec, STRENGTHS[Math.max(0, STRENGTHS.indexOf(strength) - 1)].scale))}
-                    onNext={() => setSpec(setStructure(spec, STRENGTHS[Math.min(STRENGTHS.length - 1, STRENGTHS.indexOf(strength) + 1)].scale))}
-                  />
+                  {free ? (
+                    <Stepper
+                      id="stronger"
+                      label="💪 Body"
+                      value={`${Math.round((spec.structureScale ?? 1) * 100) / 100}× strong`}
+                      onMinus={() => setSpec(setStructure(spec, Math.max(1, (spec.structureScale ?? 1) / 1.25)))}
+                      onPlus={() => setSpec(setStructure(spec, (spec.structureScale ?? 1) * 1.25))}
+                      typed={{ value: spec.structureScale ?? 1, unit: '× strong', onSet: (n) => setSpec(setStructure(spec, Math.max(1, n))) }}
+                    />
+                  ) : (
+                    <Chooser
+                      id="stronger"
+                      label="💪 Body"
+                      value={strength.label}
+                      onPrev={() => setSpec(setStructure(spec, STRENGTHS[Math.max(0, STRENGTHS.indexOf(strength) - 1)].scale))}
+                      onNext={() => setSpec(setStructure(spec, STRENGTHS[Math.min(STRENGTHS.length - 1, STRENGTHS.indexOf(strength) + 1)].scale))}
+                    />
+                  )}
                 </>
               )}
               {i === 0 && (
@@ -464,7 +538,8 @@ export function RoscoeBuilder(p: Props) {
                     label="Boosters"
                     value={String(st.boosters?.count ?? 0)}
                     onMinus={() => setSpec(setBoosters(spec, st.boosters?.part ?? BOOSTERS[0], (st.boosters?.count ?? 0) - 2))}
-                    onPlus={() => setSpec(setBoosters(spec, st.boosters?.part ?? BOOSTERS[0], Math.min(6, (st.boosters?.count ?? 0) + 2)))}
+                    onPlus={() => setSpec(setBoosters(spec, st.boosters?.part ?? BOOSTERS[0], cap((st.boosters?.count ?? 0) + 2, 6)))}
+                    typed={free ? { value: st.boosters?.count ?? 0, unit: 'boosters', onSet: (n) => setSpec(setBoosters(spec, st.boosters?.part ?? BOOSTERS[0], n)) } : undefined}
                   />
                   {st.boosters && (
                     <>

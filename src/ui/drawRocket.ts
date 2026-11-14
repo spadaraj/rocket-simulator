@@ -117,7 +117,10 @@ export function drawRocket(
 
   const side = v.sidePayload;
   const sideX = side && bottom ? coreDiameter / 2 + side.diameterM / 2 : 0;
-  const coreEngines = !side;
+  // On the real Shuttle the main engines sit on the orbiter. On anything else the orbiter
+  // just rides along, and the rocket's own engines show.
+  const shuttleEngines = !!side && !!bottom?.engines.some((g) => g.engine.id === 'rs-25-shuttle');
+  const coreEngines = !shuttleEngines;
 
   // Flames under the bottom stage's engines.
   if (vis.flame > 0 && bottom && coreEngines) {
@@ -150,7 +153,8 @@ export function drawRocket(
   if (b && vis.boostersAttached) {
     const bd = b.booster.diameterM ?? 3.7;
     const bl = b.booster.lengthM ?? 50;
-    const perSide = Math.ceil(b.count / 2);
+    // Huge numbers are drawn as a crowd of up to 4 a side (the builder shows the real count).
+    const perSide = Math.min(4, Math.ceil(b.count / 2));
     for (let side = -1; side <= 1; side += 2) {
       for (let k = perSide - 1; k >= 0; k--) {
         const x = side * (coreDiameter / 2 + bd / 2 + k * bd * 0.55 - k * bd * 0.1);
@@ -194,7 +198,7 @@ export function drawRocket(
     }
   }
 
-  if (side) drawOrbiter(ctx, side, sideX, bottom ? vis.flame : 0, flicker);
+  if (side) drawOrbiter(ctx, side, sideX, bottom && shuttleEngines ? vis.flame : 0, flicker);
 
   // The stack itself.
   let y = 0;
