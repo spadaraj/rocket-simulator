@@ -17,7 +17,7 @@ import {
 } from '../physics/edit';
 import type { MissionRecord } from '../physics/mission';
 import type { Arrival, Destination, RocketSpec } from '../physics/types';
-import type { Chapter, CheckContext, Mission } from './types';
+import type { BuildCheck, Chapter, CheckContext, Mission } from './types';
 
 export const CHAPTERS: Chapter[] = [
   { n: 1, title: 'Launch School', rank: 'Cadet' },
@@ -92,6 +92,11 @@ const tliSpare = (m: MissionRecord) => {
   const tli = m.moon?.legs.find((l) => l.id === 'tli');
   return tli ? tli.availableMS - tli.neededMS : Infinity;
 };
+
+// ---------- Did's build checklist ----------
+
+const crewOnTop: BuildCheck = { text: '👨‍🚀 A crew capsule on top, to bring the crew home', ok: (s) => !!payloadSlot(s, 'capsule') };
+const landerOnTop: BuildCheck = { text: '🛬 A lander on top', ok: (s) => !!payloadSlot(s, 'lander') };
 
 export const MISSIONS: Mission[] = [
   // ---------------- Chapter 1: Launch School ----------------
@@ -176,6 +181,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Use only 2 stages', check: (c) => done(c) && c.spec.stages.length <= 2 },
       { text: 'Splash down slower than 9 m/s', check: (c) => crewHome(c.m) && (c.m.reentry?.splashSpeedMS ?? 99) < 9 },
     ],
+    checks: [crewOnTop],
     unlocks: ['addStage', 'stageStrip'],
     skill: 'stages',
     coach: [{ say: 'Launch the one-stage rocket and watch the fuel dial.', point: 'launch', until: (c) => c.phase !== 'ready' }],
@@ -206,6 +212,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Weigh less than 400 t at liftoff', check: (c) => done(c) && c.m.ascent.summary.liftoffMassKg < 400e3 },
       { text: 'Just enough fuel: less than 1,000 m/s left over', check: (c) => done(c) && c.m.ascent.outcome.remainingDeltaVMS < 1000 },
     ],
+    checks: [crewOnTop],
     unlocks: ['tank', 'autoSize'],
     skill: 'fuel',
     flightLines: { staging: 'Watch the top stage’s fuel. Will it be enough?' },
@@ -233,6 +240,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Protect it with a nose cover', check: (c) => orbit(c.m) && !!payloadSlot(c.spec, 'cargo') && !!payloadSlot(c.spec, 'fairing') },
       { text: 'Launch the BIG satellite', check: (c) => orbit(c.m) && payloadSlot(c.spec, 'cargo') === 'satellite-heavy' },
     ],
+    checks: [{ text: '🛰️ A satellite on top', ok: (s) => !!payloadSlot(s, 'cargo')?.startsWith('satellite') }],
     unlocks: ['payload'],
     skill: 'payload',
     flightLines: { jettison: 'The nose cover pops off now that the air is thin!', orbit: 'Beep… beep… beep! Your satellite is in orbit!' },
@@ -260,6 +268,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Keep the heat shield under 80% used', check: (c) => crewHome(c.m) && heatShare(c.m) < 0.8 },
       { text: 'Use the normal (lightest) heat shield', check: (c) => crewHome(c.m) && (c.spec.payload.heatShieldScale ?? 1) <= 1 },
     ],
+    checks: [crewOnTop],
     unlocks: ['heatShield', 'comeHome'],
     skill: 'reentry',
     flightLines: { orbit: 'In orbit! After a few laps, the capsule comes home through the hot air.' },
@@ -286,6 +295,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Keep the air push under 85% of the strength', check: (c) => done(c) && airPushShare(c.m) < 0.85 },
       { text: 'Do it without making the body stronger', check: (c) => done(c) && (c.spec.structureScale ?? 1) <= 1 },
     ],
+    checks: [crewOnTop],
     unlocks: ['airPush', 'easeOff', 'stronger', 'fins'],
     skill: 'maxQ',
     flightLines: { maxQ: 'Max-Q! The air is pushing its hardest right now.' },
@@ -313,6 +323,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Touch down slower than 3 m/s', check: (c) => boosterLanded(c.m) && (c.m.recoveries.find((r) => r.kind === 'stage')?.touchdownSpeedMS ?? 9) < 3 },
       { text: 'Save 60 t of landing fuel or less', check: (c) => boosterLanded(c.m) && (c.spec.stages[0].landingReserveKg ?? 0) <= 60e3 },
     ],
+    checks: [{ text: '🦿 “Land it” is on for the bottom stage', ok: (s) => s.stages[0]?.recovery === 'propulsive' }],
     unlocks: ['landIt', 'landingFuel', 'boosterChutes'],
     skill: 'landing',
     flightLines: { staging: 'Booster separation! Now watch the landing cam.' },
@@ -340,6 +351,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Still have 1,500 m/s left in orbit', check: (c) => done(c) && c.m.ascent.outcome.remainingDeltaVMS >= 1500 },
       { text: 'Win a flight with Chaos Mode on 🎲', check: (c) => done(c) && c.stats.chaos },
     ],
+    checks: [crewOnTop],
     unlocks: ['chaos'],
     skill: 'engineOut',
     flightLines: { engineOut: 'Engine out! Can the others make up for it?' },
@@ -369,6 +381,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Land the booster too', check: (c) => done(c) && boosterLanded(c.m) },
       { text: 'Weigh less than 420 t at liftoff', check: (c) => done(c) && c.m.ascent.summary.liftoffMassKg < 420e3 },
     ],
+    checks: [{ text: '📏 How high: at least 380 km', ok: (s) => s.mission.targetOrbitAltitudeM >= 380e3 }, crewOnTop],
     unlocks: ['targetHeight'],
     skill: 'height',
     flightLines: { orbit: 'Station in sight! Docking… complete!' },
@@ -395,6 +408,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Protect it with a nose cover', check: (c) => !!c.m.raise?.success && !!payloadSlot(c.spec, 'fairing') },
       { text: 'Land the booster too', check: (c) => !!c.m.raise?.success && boosterLanded(c.m) },
     ],
+    checks: [{ text: '🛰️ A satellite on top', ok: (s) => !!payloadSlot(s, 'cargo')?.startsWith('satellite') }],
     unlocks: ['whereTo'],
     skill: 'highOrbit',
     hints: ['The satellite has to climb to 36,000 km. Is “Where to?” set to High orbit? Is there enough fuel?', 'Set “Where to?” to High orbit, then make the top stage’s tank bigger.'],
@@ -420,6 +434,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Land the booster too', check: (c) => done(c) && boosterLanded(c.m) },
       { text: 'Name it and save it 💾', check: (c) => done(c) && c.stats.saved },
     ],
+    checks: [crewOnTop],
     unlocks: ['engineType', 'tinker', 'scratch'],
     skill: 'design',
     hints: ['Think back: stages, fuel, enough push, not too fast in thick air.', 'Add a stage on top. Then check the push meter says it can lift off.'],
@@ -448,6 +463,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Find the coolest way home: heat shield under 80%', check: (c) => moonOk(c.m) && crewHome(c.m) && heatShare(c.m) < 0.8 },
       { text: 'Bring the boosters back with parachutes ♻️', check: (c) => moonOk(c.m) && crewHome(c.m) && boostersSaved(c.m) },
     ],
+    checks: [crewOnTop],
     unlocks: [],
     skill: 'freeReturn',
     coach: [
@@ -483,6 +499,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Just enough fuel: less than 400 m/s spare after the Moon push', check: (c) => done(c) && c.m.moon?.trip === 'land' && tliSpare(c.m) < 400 },
       { text: 'Win with Chaos Mode on 🎲', check: (c) => done(c) && c.m.moon?.trip === 'land' && c.stats.chaos },
     ],
+    checks: [landerOnTop, crewOnTop],
     unlocks: ['lander'],
     skill: 'lander',
     coach: [{ say: 'Launch it! Watch the list of Moon burns. Which one goes wrong?', point: 'launch', until: (c) => c.phase !== 'ready' }],
@@ -515,6 +532,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Fly it as a landing mission, like the real Apollo 13', check: (c) => moonOk(c.m) && crewHome(c.m) && c.spec.mission.target === 'moon' },
       { text: 'Win with Chaos Mode on 🎲', check: (c) => moonOk(c.m) && crewHome(c.m) && c.stats.chaos },
     ],
+    checks: [crewOnTop],
     unlocks: [],
     skill: 'lifeboat',
     coach: [{ say: 'Launch it, and watch what happens on the way to the Moon.', point: 'launch', until: (c) => c.phase !== 'ready' }],
@@ -542,6 +560,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Protect the base with a nose cover', check: (c) => moonOk(c.m) && !!c.m.moon?.oneWay && !!payloadSlot(c.spec, 'fairing') },
       { text: 'Weigh less than 6,000 t at liftoff', check: (c) => moonOk(c.m) && !!c.m.moon?.oneWay && c.m.ascent.summary.liftoffMassKg < 6000e3 },
     ],
+    checks: [{ text: '📦 The Moon base on top', ok: (s) => payloadSlot(s, 'cargo') === 'moon-base' }, landerOnTop],
     unlocks: [],
     skill: 'cargo',
     flightLines: { orbit: 'Base in orbit! Now for the long trip to the Moon.' },
@@ -627,6 +646,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Bring the side boosters back with parachutes ♻️', check: (c) => planetOk(c.m, 'mars', 'land') && boostersSaved(c.m) },
       { text: 'Win with Chaos Mode on 🎲', check: (c) => planetOk(c.m, 'mars', 'land') && c.stats.chaos },
     ],
+    checks: [{ text: '🚙 A rover on top', ok: (s) => !!payloadSlot(s, 'lander')?.startsWith('rover') }],
     unlocks: ['rover'],
     skill: 'marsLanding',
     coach: [{ say: 'Launch it, and watch the landing at the very end.', point: 'launch', until: (c) => c.phase !== 'ready' }],
@@ -654,6 +674,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Launch within 2 weeks of the best day 🎯', check: (c) => planetOk(c.m, 'mars', 'land') && onTime(c.m) },
       { text: 'Bring the Moon base along to Mars too 📦', check: (c) => planetOk(c.m, 'mars', 'land') && payloadSlot(c.spec, 'cargo') === 'moon-base' },
     ],
+    checks: [landerOnTop],
     unlocks: ['marsLander'],
     skill: 'tripPlan',
     coach: [
@@ -686,6 +707,7 @@ export const MISSIONS: Mission[] = [
       { text: 'Keep working for 4 hours', check: (c) => planetOk(c.m, 'venus', 'land') && (c.m.planet?.surfaceMinutes ?? 0) >= 240 },
       { text: 'Win with Chaos Mode on 🎲', check: (c) => planetOk(c.m, 'venus', 'land') && c.stats.chaos },
     ],
+    checks: [landerOnTop],
     unlocks: [],
     skill: 'venus',
     coach: [{ say: 'Launch it, and keep an eye on the timer once it lands.', point: 'launch', until: (c) => c.phase !== 'ready' }],

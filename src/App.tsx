@@ -24,11 +24,15 @@ import { RocketThumb } from './ui/RocketThumb';
 import { RoscoeBuilder } from './ui/RoscoeBuilder';
 import { RoscoeDials } from './ui/RoscoeDials';
 import { RaiseView } from './ui/RaiseView';
-import { lessonFor } from './ui/lessons';
-import { LessonCard } from './ui/ResultCard';
+import { fmtMeter, lessonFor, type Meter } from './ui/lessons';
+import { describeChanges, type Change } from './ui/changes';
+import { LessonCard, ProgressNote, type TryNote } from './ui/ResultCard';
 import { Coach } from './ui/mission/Coach';
 import { Did } from './ui/mission/Characters';
 import { Briefing, Debrief, Home, MissionMap, SkillBook } from './ui/mission/MissionScreens';
+import { MissionCard, missionChecks, type LastTry } from './ui/mission/MissionCard';
+import { walkthroughSteps } from './missions/walkthrough';
+import { SKILLS } from './missions/skills';
 import { CONTROL_INFO } from './missions/controlInfo';
 import { introSteps } from './missions/intro';
 import { MISSIONS } from './missions/missions';
@@ -137,6 +141,12 @@ export default function App() {
   const [attempts, setAttempts] = useState(0);
   const [outcome, setOutcome] = useState<MissionOutcome | null>(null);
   const [showMe, setShowMe] = useState<{ target: string; say: string } | null>(null);
+  // How the last mission try went, to compare the next one with.
+  const prevTry = useRef<{ spec: RocketSpec; problem: string; what: string; meter?: Meter } | null>(null);
+  const [lastTry, setLastTry] = useState<LastTry | null>(null);
+  const [tryNote, setTryNote] = useState<TryNote | null>(null);
+  // What "Let Did fix it" just changed, shown in the Build tab until the next launch.
+  const [didFix, setDidFix] = useState<{ changes: Change[]; why?: string; rule?: string } | null>(null);
   const [line, setLine] = useState<string | null>(null);
   const firedLines = useRef(new Set<string>());
   const [mode, setModeState] = useState<Mode>(loadMode);
@@ -202,6 +212,11 @@ export default function App() {
   const thumbs = useMemo(() => Object.fromEntries(allRockets.map((p) => [p.id, buildVehicle(p, catalog)])), [allRockets]);
   const feedback = useMemo(() => missionFeedback(mission), [mission]);
   const lesson = useMemo(() => lessonFor(mission, spec), [mission, spec]);
+  /** What goes wrong with the mission's starting rocket: the problem its hints are about. */
+  const expectedProblem = useMemo(
+    () => (active ? (flyMission(active.rocket(), catalog, { faults: active.faults ?? [] }).result.failure?.type ?? 'goal') : null),
+    [active],
+  );
   const realFlight = useMemo(() => {
     const g = goldenFor(presetId);
     return g ? scorecard(g, record) : undefined;
@@ -301,6 +316,7 @@ export default function App() {
     firedLines.current.clear();
     setLine(null);
     setOutcome(null);
+    setDidFix(null);
     setPhase('countdown');
   };
 
@@ -314,6 +330,15 @@ export default function App() {
   };
 
   const tryFix = (f: FixResult) => {
+    if (roscoe) {
+      // Show what changed, where, and why, then let Roscoe launch it himself.
+      const why = lesson?.fixes.find((x) => x.control === f.control)?.text;
+      const changes = describeChanges(spec, f.spec);
+      setDidFix({ changes: changes.length ? changes : [{ text: f.roscoe }], why, rule: lesson ? `${SKILLS[lesson.skill].emoji} ${SKILLS[lesson.skill].title}` : undefined });
+      setSpec(f.spec);
+      setTab('build');
+      return;
+    }
     setSpec(f.spec);
     setTab('fly');
   };
@@ -354,6 +379,10 @@ export default function App() {
     setCoachSteps([]);
     setAttempts(0);
     setOutcome(null);
+    prevTry.current = null;
+    setLastTry(null);
+    setTryNote(null);
+    setDidFix(null);
     setStats(NO_STATS);
     setShowMe(null);
     setLine(null);
@@ -391,6 +420,28 @@ export default function App() {
     }
     if (!won) setAttempts((n) => n + 1);
     setOutcome({ won, starChecks, earned, best });
+
+    // Compare with the last try, so the card can say what changed and whether it helped.
+    const problem = mission.result.failure?.type ?? 'goal';
+    const what = lesson ? lesson.what : `The flight went fine, but the mission was: ${active!.goalText}.`;
+    const prev = prevTry.current;
+    setTryNote(
+      prev && !won
+        ? {
+            changes: describeChanges(prev.spec, spec),
+            same: prev.problem === problem,
+            prevWhat: prev.what,
+            before: prev.meter && lesson?.meter && prev.meter.label === lesson.meter.label ? prev.meter.value : undefined,
+          }
+        : null,
+    );
+    prevTry.current = won ? null : { spec, problem, what, meter: lesson?.meter };
+    const m = lesson?.meter;
+    setLastTry(
+      won
+        ? { text: `You did it! ${'★'.repeat(earned)}${earned < 3 ? ' Can you get more stars?' : ''}`, good: true }
+        : { text: m ? `${what} ${m.label}: ${fmtMeter(m)} (${m.limitLabel} ${fmtMeter(m, m.limit)}).` : what, good: false },
+    );
   }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A changed rocket is a new try.
@@ -421,6 +472,33 @@ export default function App() {
   }, [line]);
 
   /** "Show me": go to where the control lives and have Did point at it. */
+  /** After a few tries: Did walks Roscoe through a fix that he knows works, one change at a time. */
+  const startWalkthrough = () => {
+    const m = active!;
+    const start = missionStart ?? m.rocket();
+    const wins = (s: RocketSpec) => m.goal({ m: flyMission(s, catalog, { faults: m.faults ?? [] }), spec: s, stats: NO_STATS });
+    const tested = fix?.status === 'done' ? fix.fixes.find((f) => f.complete && f.control && can(f.control)) : undefined;
+    const plans: [RocketSpec, RocketSpec][] = [
+      ...(tested ? [[spec, tested.spec] as [RocketSpec, RocketSpec]] : []),
+      [spec, m.solve(spec)],
+      [start, m.solve(start)],
+    ];
+    for (const [from, to] of plans) {
+      const steps = walkthroughSteps(from, to, controls);
+      if (!steps || !wins(to)) continue;
+      setShowMe(null);
+      again();
+      if (from !== spec) {
+        setSpec(from);
+        steps.unshift({ say: 'Let’s start again from the mission rocket, and fix it together.', ok: true });
+      }
+      setCoachSteps(steps);
+      return;
+    }
+    // No step-by-step plan: point at the main control instead.
+    onShowMe(m.hintControl);
+  };
+
   const onShowMe = (c: ControlId) => {
     const info = CONTROL_INFO[c];
     if (info.tab === 'build') {
@@ -459,26 +537,34 @@ export default function App() {
 
   if (screen === 'home')
     return <Home progress={progress} onMissions={() => setScreen('map')} onSandbox={goSandbox} onSkills={() => setScreen('skills')} />;
-  if (screen === 'map') return (
-      <MissionMap
-        progress={progress}
-        onPlay={startMission}
-        onHome={() => setScreen('home')}
-        onProgress={(p) => (setProgress(p), saveProgress(p))}
-      />
-    );
+  if (screen === 'map') return <MissionMap progress={progress} onPlay={startMission} onHome={() => setScreen('home')} />;
   if (screen === 'skills') return <SkillBook progress={progress} onBack={() => setScreen('home')} />;
 
-  // Mission Mode: Did's hint grows with each failed try; on the third, he offers to show the fix.
+  // Mission Mode: Did's hint grows with each failed try, but only when the problem is the one
+  // the mission is about; otherwise he points at what's still missing. On the third try he
+  // offers to walk Roscoe through the fix.
+  const nowProblem = mission.result.failure?.type ?? 'goal';
+  const unmet = inMission ? missionChecks(active!).filter((c) => !c.ok(spec)) : [];
+  const hintText = !inMission
+    ? null
+    : nowProblem === expectedProblem
+      ? attempts === 1
+        ? active!.hints[0]
+        : active!.hints[1]
+      : unmet.length
+        ? `Look at my checklist in Build. Not done yet: ${unmet.map((c) => c.text.replace(/^\S+\s/, '')).join('; ')}.`
+        : attempts >= 3
+          ? 'This one is tricky! Want me to walk you through it?'
+          : null;
   const hint =
-    inMission && attempts > 0 ? (
+    inMission && attempts > 0 && hintText ? (
       <div className="lesson-hint">
         <Did size={56} />
         <div>
-          <b>Flight Director Did:</b> {attempts === 1 ? active!.hints[0] : active!.hints[1]}
-          {attempts >= 3 && can(active!.hintControl) && (
-            <button className="btn small primary" onClick={() => onShowMe(active!.hintControl)}>
-              👉 Show me how
+          <b>Flight Director Did:</b> {hintText}
+          {attempts >= 3 && (
+            <button className="btn small primary" onClick={startWalkthrough}>
+              🧭 Walk me through it
             </button>
           )}
         </div>
@@ -611,6 +697,32 @@ export default function App() {
 
       {tab === 'build' && (
         <main className="stage scroll">
+          {roscoe && didFix && (
+            <div className="did-fixed" role="status">
+              <Did size={64} />
+              <div>
+                <b>🔧 Did changed {didFix.changes.length === 1 ? 'one thing' : `${didFix.changes.length} things`}:</b>
+                <ul>
+                  {didFix.changes.map((c) => (
+                    <li key={c.text}>{c.text}</li>
+                  ))}
+                </ul>
+                {didFix.why && (
+                  <p>
+                    💡 Why: {didFix.why}
+                    {didFix.rule && <> Engineer’s rule: {didFix.rule}.</>}
+                  </p>
+                )}
+                <p className="did-fixed-note">The changes are glowing below. Now launch it and see!</p>
+                <button className="btn big primary" onClick={() => setTab('fly')}>
+                  🚀 Go fly it
+                </button>
+              </div>
+            </div>
+          )}
+          {inMission && (
+            <MissionCard mission={active!} spec={spec} liftoffTWR={record.summary.liftoffTWR} best={progress.stars[active!.id] ?? 0} lastTry={lastTry} />
+          )}
           {roscoe ? (
             <RoscoeBuilder
               spec={spec}
@@ -621,12 +733,13 @@ export default function App() {
               autoSizing={autoSizing}
               autoMessage={autoMessage}
               onAutoSize={autoSize}
-              onReset={() => setSpec(preset)}
+              onReset={() => setSpec(base)}
               onFly={() => setTab('fly')}
               onSave={saveRocket}
               saved={(isMine || (inMission && stats.saved)) && !modified}
               controls={controls}
               fresh={fresh}
+              changed={didFix ? new Set(didFix.changes.flatMap((c) => (c.control ? [c.control] : []))) : undefined}
             />
           ) : (
             <EngineerBuilder
@@ -756,6 +869,7 @@ export default function App() {
                     <h2>The flight went fine, but the mission was: {active!.goalText}.</h2>
                   </div>
                 </div>
+                {tryNote && <ProgressNote note={tryNote} />}
                 {hint}
                 <div className="result-actions">
                   {!hint && (
@@ -780,6 +894,7 @@ export default function App() {
                 onShowMe={onShowMe}
                 controls={controls}
                 hint={hint}
+                note={inMission ? tryNote : null}
               />
             )}
             {phase === 'done' && roscoe && !inMission && !lesson && (

@@ -3,7 +3,8 @@ import type { FixResult } from '../physics/fixes';
 import type { MissionStep } from '../physics/mission';
 import type { ControlId } from '../physics/controls';
 import { SKILLS } from '../missions/skills';
-import type { Lesson, Meter } from './lessons';
+import type { Change } from './changes';
+import { fmtMeter, meterBetter, type Lesson, type Meter } from './lessons';
 import type { Feedback } from './messages';
 import { Did } from './mission/Characters';
 import { canSpeak, speak } from './speech';
@@ -172,31 +173,79 @@ export function EngineerResult({ fb, fix, steps, replays, onAgain, onTryFix }: C
 
 // ---------- Failures that teach ----------
 
-const SCALE: Record<string, number> = { MN: 1e-6, kPa: 1e-3 };
-
-function MeterBar({ meter }: { meter: Meter }) {
-  const k = SCALE[meter.unit] ?? 1;
-  const top = Math.max(meter.value, meter.limit) * 1.15 || 1;
+function MeterBar({ meter, before }: { meter: Meter; before?: number }) {
+  const top = Math.max(meter.value, meter.limit, before ?? 0) * 1.15 || 1;
   const bad = meter.want === 'below' ? meter.value > meter.limit : meter.value < meter.limit;
-  const fmt = (x: number) => (x * k).toLocaleString(undefined, { maximumFractionDigits: x * k < 10 ? 1 : 0 });
   return (
-    <div className="lesson-meter" aria-label={`${meter.label}: ${fmt(meter.value)} ${meter.unit}, ${meter.limitLabel} ${fmt(meter.limit)} ${meter.unit}`}>
+    <div className="lesson-meter" aria-label={`${meter.label}: ${fmtMeter(meter)}, ${meter.limitLabel} ${fmtMeter(meter, meter.limit)}`}>
       <div className="lm-head">
         <span>
           {meter.emoji} {meter.label}
         </span>
-        <b className={bad ? 'bad' : 'ok'}>
-          {fmt(meter.value)} {meter.unit}
-        </b>
+        <b className={bad ? 'bad' : 'ok'}>{fmtMeter(meter)}</b>
       </div>
       <div className="lm-bar">
         <span className={`lm-fill ${bad ? 'bad' : 'ok'}`} style={{ width: `${(meter.value / top) * 100}%` }} />
+        {before !== undefined && (
+          <span className="lm-before" style={{ left: `${(before / top) * 100}%` }} title={`Last try: ${fmtMeter(meter, before)}`}>
+            <em>last try</em>
+          </span>
+        )}
         <span className="lm-line" style={{ left: `${(meter.limit / top) * 100}%` }}>
           <em>
-            {meter.limitLabel}: {fmt(meter.limit)} {meter.unit}
+            {meter.limitLabel}: {fmtMeter(meter, meter.limit)}
           </em>
         </span>
       </div>
+    </div>
+  );
+}
+
+/** How this try compares with the one before it. */
+export interface TryNote {
+  /** What Roscoe changed since the last flight. */
+  changes: Change[];
+  /** The same problem happened again. */
+  same: boolean;
+  /** What went wrong last time. */
+  prevWhat: string;
+  /** Last time's reading on the same meter. */
+  before?: number;
+}
+
+export function ProgressNote({ note, meter }: { note: TryNote; meter?: Meter }) {
+  if (!note.changes.length)
+    return (
+      <div className="lesson-progress same">
+        🔁 That was the same rocket as last time, so the same thing happened. Change something in Build first!
+      </div>
+    );
+  const changed = note.changes.slice(0, 3).map((c) => c.text).join(' · ');
+  if (!note.same)
+    return (
+      <div className="lesson-progress better">
+        <b>🎉 Your change worked!</b> Last time: {note.prevWhat.replace(/[.!]$/, '').toLowerCase()}. That’s fixed now. But there’s a new problem to solve:
+        <small>You changed: {changed}</small>
+      </div>
+    );
+  const moved = meter && note.before !== undefined ? meterBetter(meter, note.before) : undefined;
+  const reading =
+    meter && note.before !== undefined ? (
+      <>
+        {' '}
+        {meter.label}: {fmtMeter(meter, note.before)} → <b>{fmtMeter(meter)}</b> ({meter.limitLabel} {fmtMeter(meter, meter.limit)}).
+      </>
+    ) : null;
+  return (
+    <div className={`lesson-progress ${moved ? 'closer' : 'same'}`}>
+      <b>{moved === undefined ? '🤔 Same problem as last time.' : moved ? '📈 Getting closer!' : '📉 That went the wrong way.'}</b>
+      {reading}{' '}
+      {moved
+        ? 'Keep going: a bit more of the same change, or add one of the fixes below.'
+        : moved === false
+          ? 'Try changing it the other way, or pick a different fix below.'
+          : 'That change didn’t fix this one. Try a fix from the list below.'}
+      <small>You changed: {changed}</small>
     </div>
   );
 }
@@ -213,14 +262,19 @@ interface LessonProps {
   controls?: Set<ControlId>;
   /** Mission Mode: Did's hint for this try, if any. */
   hint?: ReactNode;
+  /** How this try compares with the last one. */
+  note?: TryNote | null;
 }
 
-export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onShowMe, controls, hint }: LessonProps) {
+export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onShowMe, controls, hint, note }: LessonProps) {
   const allowed = (c?: ControlId) => !controls || (!!c && controls.has(c));
-  const fixes = lesson.fixes.filter((f) => allowed(f.control));
-  const tested = fix?.status === 'done' ? fix.fixes.find((f) => allowed(f.control)) : undefined;
+  const working = fix?.status === 'done' ? fix.fixes.filter((f) => allowed(f.control)) : [];
+  const testedFor = (c: ControlId) => working.find((f) => f.control === c);
+  // Fixes Did has tried and seen work go first.
+  const fixes = lesson.fixes.filter((f) => allowed(f.control)).sort((a, b) => Number(!!testedFor(b.control)) - Number(!!testedFor(a.control)));
+  const tested = working[0];
   const skill = SKILLS[lesson.skill];
-  const readAloud = `${lesson.what} ${lesson.why.join(' ')} How to fix it: ${fixes.map((f) => f.text).join(' ')}`;
+  const readAloud = `${lesson.what} ${lesson.why.join(' ')} ${lesson.analogy ?? ''} How to fix it: ${fixes.map((f) => f.text).join(' ')}`;
   return (
     <div className="result-card roscoe lose lesson">
       <div className="lesson-head">
@@ -230,26 +284,40 @@ export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onS
           <h2>{lesson.what}</h2>
         </div>
       </div>
-      {lesson.meter && <MeterBar meter={lesson.meter} />}
+      {note && <ProgressNote note={note} meter={lesson.meter} />}
+      {lesson.meter && <MeterBar meter={lesson.meter} before={note?.same && note.changes.length ? note.before : undefined} />}
       <div className="lesson-why">
         <div className="result-kicker">🔬 Why</div>
         {lesson.why.map((w) => (
           <p key={w}>{w}</p>
         ))}
       </div>
+      <div className="lesson-rule">
+        <div className="result-kicker">
+          📐 Engineer’s rule: {skill.emoji} {skill.title}
+        </div>
+        {lesson.analogy && <p>{lesson.analogy}</p>}
+      </div>
       {hint}
       <div className="lesson-fixes">
         <div className="result-kicker">🔧 How you can fix it</div>
         <ul>
-          {fixes.map((f) => (
-            <li key={f.text}>
-              <span>{f.text}</span>
-              <button className="btn small" onClick={() => onShowMe(f.control)}>
-                👉 Show me
-              </button>
-            </li>
-          ))}
+          {fixes.map((f) => {
+            const t = testedFor(f.control);
+            return (
+              <li key={f.text} className={t ? 'tested' : ''}>
+                <span>
+                  {f.text}
+                  {t && <small className="lesson-tested">✅ Did tried it and it works: {t.roscoe.toLowerCase()}</small>}
+                </span>
+                <button className="btn small" onClick={() => onShowMe(f.control)}>
+                  👉 Show me
+                </button>
+              </li>
+            );
+          })}
         </ul>
+        {fix?.status === 'working' && <p className="lesson-testing">🔧 Did is testing fixes…</p>}
       </div>
       {steps.length > 1 && <Steps steps={steps} roscoe />}
       <div className="result-actions">
@@ -267,9 +335,6 @@ export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onS
           🚀 Fly again
         </button>
       </div>
-      <p className="lesson-skill">
-        📖 Skill Book: {skill.emoji} {skill.title}
-      </p>
       {replays.length > 1 && (
         <div className="result-replays">
           {replays.map((r) => (

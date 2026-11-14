@@ -1961,9 +1961,18 @@ button.brand {
   border-color: var(--sq-orange);
 }
 
-.sq-tile.locked {
-  opacity: 0.45;
-  cursor: default;
+.sq-tile.next {
+  border-color: var(--sq-orange);
+  box-shadow: 0 0 0 3px rgba(255, 140, 40, 0.35);
+}
+
+.sq-tile-next {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sq-orange);
 }
 
 .sq-tile-n {
@@ -2417,82 +2426,235 @@ button.brand {
   color: #c53030;
 }
 
-/* Save codes */
-.sq-save-btn {
-  margin-left: auto;
+/* Mission card at the top of the Build tab */
+.mission-card,
+.did-fixed {
+  max-width: 1068px;
+  margin: 16px auto 0;
+  padding: 12px 16px;
+  border-radius: 18px;
+  font-family: var(--font-fun);
 }
 
-.sq-save h2 {
-  margin: 0 0 6px;
-}
-
-.sq-save h3 {
-  margin: 18px 0 6px;
-  font-size: 18px;
-}
-
-.sq-save-hint {
-  margin: 0 0 8px;
-  font-size: 15px;
-  opacity: 0.8;
-}
-
-.sq-save-code {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.sq-save-code code {
-  font: 800 24px ui-monospace, Menlo, monospace;
-  letter-spacing: 1px;
-  background: #fff8e6;
-  border: 2px dashed var(--sq-ink);
-  border-radius: 12px;
-  padding: 8px 12px;
-  user-select: all;
-  overflow-wrap: anywhere;
-}
-
-.sq-save-row {
-  display: flex;
-  gap: 10px;
-}
-
-.sq-save-row input,
-.sq-save-row select {
-  flex: 1;
-  min-width: 0;
-  min-height: 44px;
-  border-radius: 12px;
-  border: 2px solid var(--sq-ink);
-  background: #fff;
+.mission-card {
+  background: var(--sq-cream);
   color: var(--sq-ink);
-  font: 600 17px var(--font-fun);
-  padding: 6px 10px;
+  border: 3px solid var(--sq-orange);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 20px;
 }
 
-.sq-save-row input {
-  font-family: ui-monospace, Menlo, monospace;
-  text-transform: uppercase;
+.mc-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.sq-save-note {
-  margin: 14px 0 0;
-  font-weight: 700;
+.mc-head .sq-patch {
+  font-size: 34px;
 }
 
-.sq-save-note.ok {
-  color: #2d7a3a;
+.mc-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.sq-save-note.bad {
+.mc-title small {
+  font-size: 14px;
   color: var(--sq-rust);
 }
 
-.sq-save-done {
+.mc-title b {
+  font-size: 21px;
+}
+
+.mc-stars,
+.mc-checks ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 16px;
+}
+
+.mc-stars li,
+.mc-checks li {
+  padding: 2px 0;
+}
+
+.mc-last {
+  grid-column: 1;
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 16px;
+}
+
+.mc-last.bad {
+  background: #ffe0d4;
+}
+
+.mc-last.good {
+  background: #dff5e4;
+}
+
+.mc-checks {
+  grid-column: 2;
+  grid-row: 2 / span 2;
+}
+
+.mc-checks-head {
+  font-weight: 800;
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+
+.mc-checks li.ok span {
+  color: #2e8b4a;
+  font-weight: 800;
+}
+
+.mc-checks li.todo {
+  color: #b23a1d;
+  font-weight: 700;
+}
+
+.mc-note {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--sq-rust);
+}
+
+@media (max-width: 700px) {
+  .mission-card {
+    grid-template-columns: 1fr;
+    margin: 12px 16px 0;
+  }
+  .mc-last,
+  .mc-checks {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .did-fixed {
+    margin: 12px 16px 0;
+  }
+}
+
+/* What "Let Did fix it" changed */
+.did-fixed {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--panel);
+  border: 3px solid var(--green);
+  font-size: 17px;
+}
+
+.did-fixed ul {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.did-fixed p {
+  margin: 4px 0;
+}
+
+.did-fixed-note {
+  color: var(--ink-dim);
+  font-size: 15px;
+}
+
+.changed {
+  position: relative;
+  box-shadow: 0 0 0 3px var(--green), 0 0 18px rgba(60, 207, 122, 0.7);
+  border-radius: 12px;
+}
+
+.changed::after {
+  content: 'DID CHANGED';
+  position: absolute;
+  top: -10px;
+  right: -6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--green);
+  color: #06301a;
+  font: 800 11px var(--font);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+
+/* Failure cards: progress since the last try, the engineer's rule, tested fixes */
+.lesson-progress {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 16px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.lesson-progress.better,
+.lesson-progress.closer {
+  background: rgba(60, 207, 122, 0.18);
+}
+
+.lesson-progress small {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+
+.lesson-rule {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 176, 46, 0.14);
+  text-align: left;
+}
+
+.lesson-rule p {
+  margin: 2px 0;
+  font-size: 16px;
+}
+
+.lesson-fixes li.tested {
+  background: rgba(60, 207, 122, 0.16);
+}
+
+.lesson-tested {
+  display: block;
+  font-size: 14px;
+  color: var(--green);
+}
+
+.lesson-testing {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+
+.lm-before {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  margin-left: -1px;
+  background: var(--ink-dim);
+  border-radius: 2px;
+}
+
+.lm-before em {
+  position: absolute;
+  bottom: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 12px;
+  font-style: normal;
+  color: var(--ink-dim);
 }

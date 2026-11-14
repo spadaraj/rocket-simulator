@@ -19,6 +19,12 @@ export interface CheckContext {
   stats: PlayStats;
 }
 
+/** One line of Did's checklist in the Build tab: something the goal needs, checked on the rocket as it is. */
+export interface BuildCheck {
+  text: string;
+  ok: (spec: RocketSpec) => boolean;
+}
+
 export interface StarGoal {
   text: string;
   check: (c: CheckContext) => boolean;
@@ -58,6 +64,8 @@ export interface Mission {
   faults?: Fault[];
   goal: (c: CheckContext) => boolean;
   stars: [StarGoal, StarGoal];
+  /** Things the goal needs that the Build tab can check before launch (never the whole answer). */
+  checks?: BuildCheck[];
   /** Controls this mission introduces. */
   unlocks: ControlId[];
   skill: SkillId;

@@ -58,15 +58,17 @@ interface Props {
   controls?: Set<ControlId>;
   /** Controls new in this mission, which glow. */
   fresh?: Set<ControlId>;
+  /** Controls Did just changed, which glow too. */
+  changed?: Set<ControlId>;
 }
 
-const Gate = createContext<{ controls?: Set<ControlId>; fresh?: Set<ControlId> }>({});
+const Gate = createContext<{ controls?: Set<ControlId>; fresh?: Set<ControlId>; changed?: Set<ControlId> }>({});
 
 /** Whether a control is shown, and whether it is new, in Mission Mode. */
 function useGate(id?: ControlId) {
   const g = useContext(Gate);
   if (!id) return { show: true, cls: '' };
-  return { show: !g.controls || g.controls.has(id), cls: g.fresh?.has(id) ? ' fresh' : '' };
+  return { show: !g.controls || g.controls.has(id), cls: g.changed?.has(id) ? ' changed' : g.fresh?.has(id) ? ' fresh' : '' };
 }
 
 const ENGINES = liquidEngines(catalog);
@@ -249,7 +251,7 @@ export function RoscoeBuilder(p: Props) {
   // Show stages top-first, like the rocket stands.
   const order = spec.stages.map((_, i) => i).reverse();
   const can = (id: ControlId) => !p.controls || p.controls.has(id);
-  const fresh = (id: ControlId) => (p.fresh?.has(id) ? ' fresh' : '');
+  const fresh = (id: ControlId) => (p.changed?.has(id) ? ' changed' : p.fresh?.has(id) ? ' fresh' : '');
   const showPayloadCard = (['scratch', 'whereTo', 'targetHeight', 'payload', 'lander', 'heatShield', 'comeHome', 'launchDay', 'arrive', 'kickStage'] as ControlId[]).some(can);
   const trips = TRIPS.filter((t) => !t.planet || can('launchDay') || tripKey(spec.mission) === t.key);
   const trip = trips.find((t) => t.key === tripKey(spec.mission)) ?? trips[0];
@@ -278,7 +280,7 @@ export function RoscoeBuilder(p: Props) {
         : 'space';
 
   return (
-    <Gate.Provider value={{ controls: p.controls, fresh: p.fresh }}>
+    <Gate.Provider value={{ controls: p.controls, fresh: p.fresh, changed: p.changed }}>
     <div className="roscoe-builder">
       <div className="rb-preview">
         <RocketThumb vehicle={p.vehicle} height={420} />
@@ -402,7 +404,7 @@ export function RoscoeBuilder(p: Props) {
                   id="tank"
                   mark={i === spec.stages.length - 1}
                   label="Fuel tank"
-                  value={`${Math.round(tank.part.lengthM ?? 0)} m${fill < 0.99 ? ` · ${Math.round(fill * 100)}% full` : ''}`}
+                  value={`${(tank.part.lengthM ?? 0) < 10 ? (Math.round((tank.part.lengthM ?? 0) * 10) / 10).toString() : Math.round(tank.part.lengthM ?? 0)} m${fill < 0.99 ? ` · ${Math.round(fill * 100)}% full` : ''}`}
                   onMinus={() => setSpec(setTank(spec, catalog, i, { lengthM: Math.max(3, (tank.part.lengthM ?? 10) * 0.8) }))}
                   onPlus={() => setSpec(setTank(spec, catalog, i, { lengthM: Math.min(90, (tank.part.lengthM ?? 10) * 1.25) }))}
                 />

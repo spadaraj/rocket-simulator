@@ -30,11 +30,54 @@ export interface Lesson {
   meter?: Meter;
   fixes: LessonFix[];
   skill: SkillId;
+  /** The engineering idea behind it, as something a kid already knows. */
+  analogy?: string;
 }
 
 const num = (x: number | string | undefined) => Number(x ?? 0);
 
+const UNIT_SCALE: Record<string, number> = { MN: 1e-6, kPa: 1e-3 };
+
+/** A meter reading in its display unit, e.g. "6.1 MN". */
+export function fmtMeter(meter: Meter, value = meter.value): string {
+  const x = value * (UNIT_SCALE[meter.unit] ?? 1);
+  return `${x.toLocaleString(undefined, { maximumFractionDigits: Math.abs(x) < 10 ? 1 : 0 })} ${meter.unit}`;
+}
+
+/** Did the reading move toward the safe side of its line? */
+export const meterBetter = (meter: Meter, before: number) => (meter.want === 'above' ? meter.value > before : meter.value < before);
+
+/** Each Skill Book idea, as something from everyday life. */
+const ANALOGY: Partial<Record<SkillId, string>> = {
+  thrust: 'Like lifting a backpack: if it’s heavier than you can lift, it stays on the floor. Every engine adds push, but each one adds a little weight too.',
+  maxQ: 'Stick your hand out of a car window: the faster you go, the harder the air shoves it. Low down, where the air is thick, it shoves hardest.',
+  stability: 'A dart flies straight because its feathers are at the back. Fins at the bottom are a rocket’s feathers.',
+  stages: 'Like a hiker who drops empty water bottles along the way: the backpack keeps getting lighter, so the walking gets easier.',
+  fuel: 'Packing snacks for a trip: bring enough, but if you pack the whole fridge you can’t carry it.',
+  engineOut: 'A table with four legs still stands if one leg wobbles. A table with one leg falls over.',
+  highOrbit: 'Reaching space is the elevator. The top floors are stairs, and your legs need energy for them: that’s the fuel left in the top stage.',
+  lifeboat: 'Ships carry lifeboats even when they don’t expect to sink. Good engineers plan for things breaking.',
+  lander: 'A plane can’t drop you on a rooftop. You need something built to set down there, with its own brakes.',
+  moonTrip: 'Reaching space is like getting to the airport. The Moon trip is the flight, and it needs its own big tank of fuel.',
+  window: 'Throwing a ball to a running friend: you throw to where they’ll be, not where they are. At the right moment, it’s an easy catch.',
+  belt: 'Swimming a race in a suit of armor: it “protects” you, but it’s so heavy you can’t get anywhere.',
+  brake: 'A bike zooming down a hill needs brakes to stop at the bottom. A probe needs its own engine to brake at a planet.',
+  sunward: 'Rolling a ball downhill: it speeds up the whole way, so stopping at the bottom is the hard part.',
+  ion: 'A race car gulps fuel. An ion engine sips it, like a slow walker who never gets tired and keeps going for years.',
+  tripPlan: 'You wouldn’t wear a swimsuit to the snow. Every world needs a lander built for it.',
+  marsLanding: 'A parachute is like holding out a blanket in the wind: great in strong wind, useless when there’s hardly any air.',
+  venus: 'Landing on Venus is like going to the bottom of the ocean inside an oven. Only very tough, well-cooled landers last.',
+  sampleReturn: 'A round trip needs fuel for the way back, like saving half your sandwich for the walk home.',
+  corridor: 'Like skipping a stone: too flat and it bounces off, too steep and it splashes hard. There’s a just-right angle in between.',
+  landing: 'Stopping a bike at a line: you need brakes, and you have to start braking early enough.',
+};
+
 export function lessonFor(m: MissionRecord, spec: RocketSpec): Lesson | undefined {
+  const l = baseLesson(m, spec);
+  return l && { ...l, analogy: ANALOGY[l.skill] };
+}
+
+function baseLesson(m: MissionRecord, spec: RocketSpec): Lesson | undefined {
   const f = m.result.failure;
   if (!f) return undefined;
   const d = f.detail;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { catalog, presets } from '../../data/catalog';
 import { MISSIONS } from '../../missions/missions';
-import { controlsFor, isUnlocked, rank } from '../../missions/progress';
+import { controlsFor, rank, upNext } from '../../missions/progress';
 import type { CheckContext, Mission } from '../../missions/types';
 import { setMission, setPayloadSlot } from '../edit';
 import { bestTransfer, hohmannSun, rM, synodicDays, departureDvMS } from '../solar';
@@ -37,12 +37,11 @@ describe('Mission Mode, Chapters 1–5', () => {
     for (const m of MISSIONS) expect(controlsFor(m.id).has(m.hintControl), m.id).toBe(true);
   });
 
-  it('one star unlocks the next mission, and finishing a chapter raises the rank', () => {
+  it('marks the first mission without a star as up next, and finishing a chapter raises the rank', () => {
     const p = { stars: {} as Record<string, number> };
-    expect(isUnlocked(p, 0)).toBe(true);
-    expect(isUnlocked(p, 1)).toBe(false);
+    expect(upNext(p)).toBe(0);
     p.stars[MISSIONS[0].id] = 1;
-    expect(isUnlocked(p, 1)).toBe(true);
+    expect(upNext(p)).toBe(1);
     expect(rank(p)).toBe('Cadet');
     for (const m of MISSIONS.filter((x) => x.chapter === 1)) p.stars[m.id] = 1;
     expect(rank(p)).toBe('Pilot');
