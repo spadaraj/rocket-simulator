@@ -577,7 +577,7 @@ export default function App() {
       <header className="topbar">
         <button className="brand" onClick={() => (inMission ? leaveMission() : setScreen('home'))} title={inMission ? 'Back to the mission map' : 'Home'}>
           {inMission ? (
-            <img src="./brand/spaceq-logo.jpg" alt="Space Q" className="brand-logo" />
+            <img src="./brand/spaceq-logo.webp" alt="Space Q" className="brand-logo" />
           ) : (
             <>
               <span className="brand-mark">🏠 A1-39</span>
@@ -866,7 +866,7 @@ export default function App() {
             {phase === 'done' && inMission && outcome && !outcome.won && !lesson && (
               <div className="result-card roscoe lose lesson">
                 <div className="lesson-head">
-                  <Did size={84} mood="oops" />
+                  <Did size={84} />
                   <div>
                     <div className="result-kicker">Almost!</div>
                     <h2>The flight went fine, but the mission was: {active!.goalText}.</h2>

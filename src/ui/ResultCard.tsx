@@ -6,7 +6,7 @@ import { SKILLS } from '../missions/skills';
 import type { Change } from './changes';
 import { fmtMeter, meterBetter, type Lesson, type Meter } from './lessons';
 import type { Feedback } from './messages';
-import { Did } from './mission/Characters';
+import { Engineer } from './mission/Characters';
 import { canSpeak, speak } from './speech';
 
 export interface FixState {
@@ -278,7 +278,7 @@ export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onS
   return (
     <div className="result-card roscoe lose lesson">
       <div className="lesson-head">
-        <Did size={84} mood="oops" />
+        <Engineer size={110} mood="oops" />
         <div>
           <div className="result-kicker">What happened</div>
           <h2>{lesson.what}</h2>

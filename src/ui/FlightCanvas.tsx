@@ -115,12 +115,117 @@ const STARS = Array.from({ length: 140 }, (_, i) => ({
   r: 0.5 + ((i * 7) % 3) * 0.45,
 }));
 
+/** Launch smoke: puffs rolling out sideways from the pad (x, height, size as shares of the cloud size). */
+const PUFFS: [number, number, number][] = [
+  [-2.6, 0.3, 0.7], [-1.9, 0.5, 0.9], [-1.1, 0.4, 1], [-0.4, 0.7, 1.1], [0.4, 0.7, 1.1], [1.1, 0.4, 1], [1.9, 0.5, 0.9],
+  [2.6, 0.3, 0.7], [-1.5, 1.2, 0.8], [1.5, 1.2, 0.8], [0, 1.4, 0.9],
+];
+
 const CLOUDS = [
   { downrangeM: -2600, altM: 1800, size: 520 },
   { downrangeM: 1500, altM: 3200, size: 700 },
   { downrangeM: 5200, altM: 2400, size: 600 },
   { downrangeM: -7000, altM: 4200, size: 800 },
 ];
+
+type RGB = [number, number, number];
+
+/**
+ * Roscoe's sky, poster style: a warm golden day on the pad, a rust-and-purple sunset on the way
+ * up, and deep navy space with cream stars. Top and bottom of the sky at each height (0 = pad, 1 = space).
+ */
+const ROSCOE_SKY: { f: number; top: RGB; bottom: RGB }[] = [
+  { f: 0, top: [222, 200, 166], bottom: [252, 216, 146] },
+  { f: 0.3, top: [214, 112, 70], bottom: [246, 186, 122] },
+  { f: 0.6, top: [70, 44, 112], bottom: [170, 92, 108] },
+  { f: 1, top: [7, 29, 66], bottom: [11, 42, 91] },
+];
+
+function skyAt(f: number): { top: string; bottom: string } {
+  const k = Math.max(0, ROSCOE_SKY.findIndex((x) => x.f >= f) - 1);
+  const a = ROSCOE_SKY[k];
+  const b = ROSCOE_SKY[Math.min(k + 1, ROSCOE_SKY.length - 1)];
+  const u = b.f === a.f ? 0 : (f - a.f) / (b.f - a.f);
+  return { top: mixColor(a.top, b.top, u), bottom: mixColor(a.bottom, b.bottom, u) };
+}
+
+/** Toronto from Space Q's island: a few towers and the CN Tower, as flat poster shapes (x, width, height as shares). */
+const SKYLINE: [number, number, number][] = [
+  [0.02, 0.05, 0.16], [0.075, 0.035, 0.24], [0.115, 0.05, 0.19], [0.17, 0.03, 0.3], [0.205, 0.045, 0.22],
+  [0.255, 0.04, 0.27], [0.3, 0.05, 0.17], [0.355, 0.03, 0.21],
+];
+
+function drawHome(ctx: CanvasRenderingContext2D, W: number, padX: number, groundY: number, fade: number, dpr: number) {
+  if (fade <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = fade;
+  // The city across the water, to the left of the pad.
+  const span = Math.min(padX - 40 * dpr, W * 0.45);
+  if (span > 60 * dpr) {
+    const h = Math.min(groundY * 0.55, 260 * dpr);
+    ctx.fillStyle = 'rgba(104, 124, 146, 0.42)';
+    for (const [x, w, hh] of SKYLINE) ctx.fillRect(x * span * 2, groundY - hh * h, w * span * 2, hh * h);
+    // The CN Tower: a needle with a pod near the top.
+    const cx = span * 0.47;
+    const th = h * 0.95;
+    ctx.beginPath();
+    ctx.moveTo(cx - 7 * dpr, groundY);
+    ctx.lineTo(cx - 1.5 * dpr, groundY - th * 0.7);
+    ctx.lineTo(cx - 0.8 * dpr, groundY - th);
+    ctx.lineTo(cx + 0.8 * dpr, groundY - th);
+    ctx.lineTo(cx + 1.5 * dpr, groundY - th * 0.7);
+    ctx.lineTo(cx + 7 * dpr, groundY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx, groundY - th * 0.68, 7 * dpr, 4.5 * dpr, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Lake Ontario, past the beach to the right of the pad.
+  const lakeX = padX + 90 * dpr;
+  if (lakeX < W) {
+    // A sandy beach that curves out toward us, then the water (paler far away, deeper up close).
+    const depth = 400 * dpr;
+    const shore = (y: number) => lakeX + ((y - groundY) / depth) * 160 * dpr;
+    ctx.fillStyle = '#efc27e';
+    ctx.beginPath();
+    ctx.moveTo(lakeX - 24 * dpr, groundY);
+    ctx.lineTo(W, groundY);
+    ctx.lineTo(W, groundY + depth);
+    ctx.lineTo(shore(groundY + depth) - 40 * dpr, groundY + depth);
+    ctx.quadraticCurveTo(lakeX + 10 * dpr, groundY + depth * 0.4, lakeX - 24 * dpr, groundY);
+    ctx.fill();
+    const lake = ctx.createLinearGradient(0, groundY, 0, groundY + 160 * dpr);
+    lake.addColorStop(0, '#a9bdb6');
+    lake.addColorStop(0.25, '#6f93a3');
+    lake.addColorStop(1, '#3d6680');
+    ctx.fillStyle = lake;
+    ctx.beginPath();
+    ctx.moveTo(lakeX, groundY + 2 * dpr);
+    ctx.lineTo(W, groundY + 2 * dpr);
+    ctx.lineTo(W, groundY + depth);
+    ctx.lineTo(shore(groundY + depth), groundY + depth);
+    ctx.quadraticCurveTo(lakeX + 40 * dpr, groundY + depth * 0.4, lakeX, groundY + 2 * dpr);
+    ctx.fill();
+    // A foamy edge where the water meets the sand.
+    ctx.strokeStyle = 'rgba(255, 250, 236, 0.8)';
+    ctx.lineWidth = 2.5 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(lakeX, groundY + 2 * dpr);
+    ctx.quadraticCurveTo(lakeX + 40 * dpr, groundY + depth * 0.4, shore(groundY + depth), groundY + depth);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(246, 235, 203, 0.55)';
+    ctx.lineWidth = 2 * dpr;
+    for (let k = 0; k < 4; k++) {
+      const y = groundY + (16 + k * 18) * dpr;
+      ctx.beginPath();
+      ctx.moveTo(lakeX + (60 + k * 40) * dpr, y);
+      ctx.lineTo(lakeX + (110 + k * 50) * dpr, y);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
 
 function mixColor(a: [number, number, number], b: [number, number, number], f: number) {
   const c = a.map((x, i) => Math.round(x + (b[i] - x) * Math.max(0, Math.min(1, f))));
@@ -272,15 +377,16 @@ export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed,
 
       // ---- sky ----
       const spaceF = Math.min(1, s.altitudeM / 70000);
-      const skyTop = roscoe ? mixColor([92, 170, 240], [8, 14, 40], spaceF) : mixColor([70, 140, 210], [5, 10, 30], spaceF);
-      const skyBottom = roscoe ? mixColor([170, 220, 255], [20, 36, 80], spaceF) : mixColor([150, 200, 240], [12, 24, 60], spaceF);
+      const rsky = skyAt(spaceF);
+      const skyTop = roscoe ? rsky.top : mixColor([70, 140, 210], [5, 10, 30], spaceF);
+      const skyBottom = roscoe ? rsky.bottom : mixColor([150, 200, 240], [12, 24, 60], spaceF);
       const g = ctx.createLinearGradient(0, 0, 0, H);
       g.addColorStop(0, skyTop);
       g.addColorStop(1, skyBottom);
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
       if (spaceF > 0.4) {
-        ctx.fillStyle = `rgba(255,255,255,${(spaceF - 0.4) * 1.4})`;
+        ctx.fillStyle = roscoe ? `rgba(255,246,220,${(spaceF - 0.4) * 1.6})` : `rgba(255,255,255,${(spaceF - 0.4) * 1.4})`;
         for (const st of STARS) {
           ctx.beginPath();
           ctx.arc(Math.abs(st.x) * W, Math.abs(st.y) * H, st.r * dpr, 0, Math.PI * 2);
@@ -336,8 +442,14 @@ export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed,
         ctx.lineTo(px, py);
       }
       ctx.closePath();
-      ctx.fillStyle = roscoe ? '#3f9b5a' : '#2c6e4a';
+      ctx.fillStyle = roscoe ? '#8e9452' : '#2c6e4a';
       ctx.fill();
+      // Roscoe's home: Space Q's island in Lake Ontario, with Toronto across the water.
+      if (roscoe) {
+        const [hx, hy] = toScreen(R_EARTH_M * Math.cos(siteAngle), R_EARTH_M * Math.sin(siteAngle));
+        const upright = Math.abs(Math.sin(siteAngle - c.upAngle)) < 0.02;
+        if (upright) drawHome(ctx, W, hx, hy, 1 - Math.min(1, s.altitudeM / 6000), dpr);
+      }
       if (viewSpanM > 300000) {
         // Atmosphere glow when zoomed out.
         ctx.strokeStyle = 'rgba(120,190,255,0.35)';
@@ -354,7 +466,7 @@ export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed,
 
       // ---- clouds (they turn with the Earth) ----
       if (viewSpanM < 60000) {
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillStyle = roscoe ? 'rgba(255,248,232,0.9)' : 'rgba(255,255,255,0.85)';
         for (const cl of CLOUDS) {
           const a = siteAngle - cl.downrangeM / R_EARTH_M;
           const rr = R_EARTH_M + cl.altM;
@@ -375,12 +487,12 @@ export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed,
         ctx.save();
         ctx.translate(px, py);
         ctx.rotate(-(siteAngle - c.upAngle));
-        ctx.fillStyle = '#d0d6df';
+        ctx.fillStyle = roscoe ? '#ddd0b4' : '#d0d6df';
         ctx.fillRect(-towerH * 0.9, -towerH * 0.04, towerH * 1.8, towerH * 0.04);
         // Launch tower: a red lattice beside the rocket.
         const tw = towerH * 0.1;
         const tx = -towerH * 0.5;
-        ctx.strokeStyle = '#c0392b';
+        ctx.strokeStyle = roscoe ? '#c4683a' : '#c0392b';
         ctx.lineWidth = Math.max(1, towerH * 0.012);
         ctx.strokeRect(tx, -towerH, tw, towerH);
         ctx.beginPath();
@@ -427,6 +539,26 @@ export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed,
         ctx.beginPath();
         ctx.arc(px, py, (8 + age * 3) * dpr, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      // ---- launch smoke, rolling out from the pad ----
+      if (armed && t > 0 && t < 45) {
+        const [hx, hy] = toScreen(R_EARTH_M * Math.cos(siteAngle), R_EARTH_M * Math.sin(siteAngle));
+        if (Math.abs(Math.sin(siteAngle - c.upAngle)) < 0.05) {
+          const life = 1 - t / 45;
+          const grow = Math.min(1, t / 5);
+          const size = Math.max(vehicle.maxDiameterM * 1.6 * c.k, 12 * dpr);
+          const spread = 1 + t * 0.06;
+          ctx.fillStyle = roscoe ? `rgba(246,235,203,${0.9 * life})` : `rgba(225,228,234,${0.75 * life})`;
+          ctx.strokeStyle = `rgba(31,42,34,${0.18 * life})`;
+          ctx.lineWidth = 1.5 * dpr;
+          for (const [ox, oy, r] of PUFFS) {
+            ctx.beginPath();
+            ctx.arc(hx + ox * size * spread * grow, hy - oy * size * grow, r * size * (0.5 + 0.5 * grow) * (1 + t * 0.025), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          }
+        }
       }
 
       // ---- rocket ----

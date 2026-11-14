@@ -7,9 +7,9 @@ import { learnedSkills, rank, totalStars, upNext, type Progress } from '../../mi
 import { SKILLS, type SkillId } from '../../missions/skills';
 import type { Mission } from '../../missions/types';
 import { canSpeak, speak } from '../speech';
-import { Did, Roscoe } from './Characters';
+import { Did, Roscoe, Scientist } from './Characters';
 
-const LOGO = './brand/spaceq-logo.jpg';
+const LOGO = './brand/spaceq-logo.webp';
 
 export function Stars({ n, of = 3, big = false }: { n: number; of?: number; big?: boolean }) {
   return (
@@ -35,11 +35,11 @@ function useReadAloud(text: string, on = true) {
 export function Home({ progress, onMissions, onSandbox, onSkills }: { progress: Progress; onMissions: () => void; onSandbox: () => void; onSkills: () => void }) {
   return (
     <div className="sq-screen sq-home">
-      <div className="sq-home-art">
-        <img src={LOGO} alt="Space Q" className="sq-logo" />
-        <Roscoe size={220} />
+      <div className="sq-home-roscoe">
+        <Roscoe size={300} />
       </div>
       <div className="sq-home-menu">
+        <img src={LOGO} alt="Space Q" className="sq-logo" />
         <div className="sq-cadet">
           <b>Roscoe</b> · {rank(progress)} · <Stars n={Math.min(3, Math.ceil(totalStars(progress) / 12))} /> {totalStars(progress)} stars
         </div>
@@ -121,7 +121,7 @@ export function Briefing({ mission, best, onGo, onBack }: { mission: Mission; be
           </div>
         </div>
         <div className="sq-talk">
-          <Did size={96} />
+          <Did size={120} mood="point" full />
           <div className="sq-bubble">
             {mission.briefing.map((l) => (
               <p key={l}>{l}</p>
@@ -194,7 +194,7 @@ export function Debrief({
   return (
     <div className="sq-card debrief">
       <div className="sq-talk">
-        <Roscoe size={92} />
+        <Roscoe size={120} mood="wow" />
         <div>
           <h2>Mission complete!</h2>
           <Stars n={shown} big />
@@ -214,10 +214,13 @@ export function Debrief({
         <p className="sq-bubble">{mission.debrief}</p>
       </div>
       <div className="sq-learned">
+        <Scientist size={80} />
+        <div>
         <b>
           🧠 You learned: {skill.emoji} {skill.title}
         </b>
         <p>{skill.text}</p>
+        </div>
       </div>
       <div className="sq-actions">
         <button className="sq-small" onClick={onMap}>
@@ -258,6 +261,7 @@ export function SkillBook({ progress, onBack }: { progress: Progress; onBack: ()
         <button className="sq-small" onClick={onBack}>
           ← Back
         </button>
+        <Scientist size={90} mood="chart" />
         <h2>📖 Roscoe’s Skill Book</h2>
         <span className="sq-cadet">
           {learned.size} of {all.length} learned

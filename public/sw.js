@@ -3,10 +3,32 @@
 // the cached copy offline. Everything else (hashed scripts, styles, icons) is cached
 // the first time it loads and served from the cache after that.
 
-const CACHE = 'rockets-v1';
+const CACHE = 'rockets-v2';
+
+// The painted Space Q art, cached up front so every character and scene works offline.
+const ART = [
+  './art/backgrounds/base-day.webp',
+  './art/backgrounds/base-night.webp',
+  './art/backgrounds/hangar.webp',
+  './art/characters/did-blink.webp',
+  './art/characters/did-neutral.webp',
+  './art/characters/did-point.webp',
+  './art/characters/did-portrait.webp',
+  './art/characters/engineer-blink.webp',
+  './art/characters/engineer-neutral.webp',
+  './art/characters/engineer-oops.webp',
+  './art/characters/roscoe-blink.webp',
+  './art/characters/roscoe-neutral.webp',
+  './art/characters/roscoe-oops.webp',
+  './art/characters/roscoe-portrait.webp',
+  './art/characters/roscoe-wow.webp',
+  './art/characters/scientist-blink.webp',
+  './art/characters/scientist-chart.webp',
+  './art/characters/scientist-neutral.webp',
+];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './manifest.webmanifest', './icons/icon-192.png'])));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './manifest.webmanifest', './icons/icon-192.png', ...ART])));
   self.skipWaiting();
 });
 

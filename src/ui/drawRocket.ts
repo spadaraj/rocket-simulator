@@ -12,7 +12,8 @@ export interface RocketVisibility {
   flame: number;
 }
 
-const OUTLINE = '#1b2a44';
+/** Ink outline, the same near-black as the Space Q logo. */
+const OUTLINE = '#1f2a22';
 
 export function visibleHeightM(v: Vehicle, vis: RocketVisibility): number {
   return v.segments
@@ -27,6 +28,45 @@ function trapezoid(ctx: CanvasRenderingContext2D, y0: number, y1: number, w0: nu
   ctx.lineTo(w1 / 2, -y1);
   ctx.lineTo(-w1 / 2, -y1);
   ctx.closePath();
+}
+
+/**
+ * Make the shape just drawn look like a round metal body: a soft highlight on the left, shade on
+ * the right (poster-style light from the upper left). Call right after filling a path.
+ */
+function shadeCylinder(ctx: CanvasRenderingContext2D, w: number) {
+  if (w <= 0) return;
+  const g = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+  g.addColorStop(0, 'rgba(255,255,255,0.08)');
+  g.addColorStop(0.22, 'rgba(255,255,255,0.32)');
+  g.addColorStop(0.45, 'rgba(255,255,255,0)');
+  g.addColorStop(0.75, 'rgba(31,42,34,0.12)');
+  g.addColorStop(1, 'rgba(31,42,34,0.34)');
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Faint rings where the tank sections join, so long bodies look built, not flat. */
+function panelLines(ctx: CanvasRenderingContext2D, y0: number, y1: number, w0: number, w1: number, lineM: number) {
+  const len = y1 - y0;
+  const d = Math.max(w0, w1);
+  if (d <= 0 || len < d * 1.6) return;
+  const n = Math.min(12, Math.floor(len / (d * 0.9)));
+  ctx.save();
+  ctx.strokeStyle = 'rgba(31,42,34,0.28)';
+  ctx.lineWidth = lineM * 0.6;
+  ctx.beginPath();
+  for (let k = 1; k < n; k++) {
+    const f = k / n;
+    const yy = y0 + len * f;
+    const w = w0 + (w1 - w0) * f;
+    ctx.moveTo(-w / 2, -yy);
+    ctx.lineTo(w / 2, -yy);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 function flamePath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, len: number, flicker: number) {
@@ -143,6 +183,7 @@ export function drawRocket(
       ctx.translate(x, 0);
       trapezoid(ctx, -bell * 0.75, 0, bell * 0.95, bell * 0.45);
       ctx.fill();
+      shadeCylinder(ctx, bell * 0.95);
       ctx.stroke();
       ctx.restore();
     }
@@ -169,7 +210,9 @@ export function drawRocket(
         ctx.fillStyle = shade;
         trapezoid(ctx, 0, bl - bd * 1.4, bd, bd);
         ctx.fill();
+        shadeCylinder(ctx, bd);
         ctx.stroke();
+        panelLines(ctx, 0, bl - bd * 1.4, bd, bd, lineM);
         // Nose cone.
         ctx.beginPath();
         ctx.moveTo(-bd / 2, -(bl - bd * 1.4));
@@ -223,6 +266,7 @@ export function drawRocket(
     } else if (s.shape === 'capsule') {
       trapezoid(ctx, y, y1, s.diameterBottomM, s.diameterTopM);
       ctx.fill();
+      shadeCylinder(ctx, s.diameterBottomM);
       ctx.stroke();
       // The one big window.
       ctx.fillStyle = '#1d3d73';
@@ -233,7 +277,9 @@ export function drawRocket(
     } else {
       trapezoid(ctx, y, y1, s.diameterBottomM, s.diameterTopM);
       ctx.fill();
+      shadeCylinder(ctx, Math.max(s.diameterBottomM, s.diameterTopM));
       ctx.stroke();
+      panelLines(ctx, y, y1, s.diameterBottomM, s.diameterTopM, lineM);
     }
     y = y1;
   }
