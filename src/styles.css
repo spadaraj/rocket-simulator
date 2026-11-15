@@ -2694,25 +2694,34 @@ button.brand {
 
 /* Parts Box: take stages and parts from any rocket (Sandbox) */
 .parts-box {
+  /* Shelf colours: each kind of part always has the same colour. */
+  --pb-stages: #4a63d0;
+  --pb-stages-d: #253a8f;
+  --pb-engines: #e8642c;
+  --pb-engines-d: #9a3a12;
+  --pb-tanks: #cf3e3e;
+  --pb-tanks-d: #7d1e1e;
+  --pb-top: #1d9e75;
+  --pb-top-d: #0a5a43;
   max-width: 1068px;
   margin: 16px auto 0;
-  padding: 10px 14px 12px;
-  border-radius: 18px;
+  padding: 14px 16px 16px;
+  border-radius: 20px;
   background: var(--panel);
-  border: 2px solid var(--amber);
+  border: 3px solid var(--amber);
   font-family: var(--font-fun);
 }
 
 .pb-head {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   border: 0;
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 22px;
+  font-size: 24px;
   cursor: pointer;
   padding: 0;
   text-align: left;
@@ -2720,52 +2729,112 @@ button.brand {
 
 .pb-head small {
   flex: 1;
-  font-size: 17px;
+  font-size: 16px;
   color: var(--ink-dim);
 }
 
+.pb-body {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.pb-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--ink-dim);
+  margin-bottom: 8px;
+}
+
+.pb-num {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--amber);
+  color: #412402;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* 1. Pick a rocket: a "choose your rocket" list */
 .pb-rockets {
   display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 10px 2px 6px;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .pb-rocket {
-  flex-shrink: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 2px;
-  min-width: 84px;
-  padding: 6px 8px;
-  border-radius: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.05);
+  gap: 8px;
+  padding: 4px 10px 4px 6px;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 0;
+  border-bottom: 4px solid rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 0.09);
   color: var(--ink);
   font: inherit;
-  font-size: 16px;
+  font-size: 15px;
+  text-align: left;
   cursor: pointer;
+  transition: transform 0.12s, background 0.12s;
 }
+
+.pb-rocket:hover { background: rgba(255, 255, 255, 0.16); }
+.pb-rocket:active { transform: translateY(2px); border-bottom-width: 2px; }
 
 .pb-rocket.on {
-  border-color: var(--amber);
-  background: rgba(255, 176, 46, 0.18);
+  background: var(--amber);
+  border-bottom-color: #b8760f;
+  color: #412402;
 }
 
-.pb-group {
-  margin-top: 8px;
+.pb-rocket-art {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 36px;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
-.pb-label {
-  font-size: 17px;
-  color: var(--ink-dim);
-  margin-bottom: 4px;
+/* 2. Grab a part: four colour-coded shelves side by side */
+.pb-shelves {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
 }
 
-.pb-cards {
+.pb-shelf {
+  border-radius: 16px;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.pb-shelf-head {
+  padding: 6px 10px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  font-size: 15px;
+  color: #fff;
+  background: var(--shelf);
+}
+
+.pb-stages { --shelf: var(--pb-stages); --shelf-d: var(--pb-stages-d); }
+.pb-engines { --shelf: var(--pb-engines); --shelf-d: var(--pb-engines-d); }
+.pb-tanks { --shelf: var(--pb-tanks); --shelf-d: var(--pb-tanks-d); }
+.pb-top { --shelf: var(--pb-top); --shelf-d: var(--pb-top-d); }
+
+.pb-shelf-cards {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
 }
 
@@ -2775,47 +2844,138 @@ button.brand {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-width: 96px;
-  min-height: 44px;
-  padding: 6px 10px;
+  min-height: 108px;
+  padding: 8px;
   border-radius: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--ink);
+  border: 0;
+  border-bottom: 5px solid var(--shelf-d);
+  background: var(--shelf);
+  color: #fff;
   font: inherit;
-  font-size: 17px;
+  font-size: 15px;
+  line-height: 1.2;
+  text-align: center;
   cursor: pointer;
+  transition: transform 0.12s, filter 0.12s;
 }
 
+.pb-card:hover { filter: brightness(1.1); }
+.pb-card:active { transform: translateY(3px); border-bottom-width: 2px; }
+
+.pb-card b { font-weight: 600; overflow-wrap: anywhere; }
+
 .pb-card small {
-  font-size: 14px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.pb-art {
+  display: grid;
+  place-items: center;
+  height: 44px;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.pb-stages .pb-art { height: 60px; overflow: hidden; }
+
+.pb-card.on {
+  outline: 4px solid #fff;
+  outline-offset: 2px;
+  animation: pb-pop 0.25s ease-out;
+}
+
+@keyframes pb-pop {
+  50% { transform: scale(1.05); }
+}
+
+.pb-card.pb-more {
+  min-height: 64px;
+  background: rgba(255, 255, 255, 0.1);
+  border-bottom-color: rgba(0, 0, 0, 0.35);
+}
+
+.pb-more .pb-art { height: 24px; font-size: 22px; }
+
+.pb-empty {
+  margin: 4px 0;
+  font-size: 13px;
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+.pb-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
   color: var(--ink-dim);
 }
 
-.pb-card.on {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(60, 207, 122, 0.4);
+/* 3. Where does it go: a bright tray along the bottom */
+.pb-where {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: #fff;
+  color: #13285a;
+  animation: pb-rise 0.2s ease-out;
 }
 
-.pb-where {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(60, 207, 122, 0.16);
-  font-size: 17px;
+.pb-where .pb-step {
+  margin: 0;
+  color: #13285a;
+  font-size: 16px;
+}
+
+@keyframes pb-rise {
+  from { opacity: 0; transform: translateY(6px); }
 }
 
 .pb-where-btns {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.pb-place {
+  min-height: 40px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 0;
+  border-bottom: 3px solid #b8760f;
+  background: var(--amber);
+  color: #412402;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.pb-place:active { transform: translateY(2px); border-bottom-width: 1px; }
+
+.pb-cancel {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #4a5a80;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 6px 10px;
 }
 
 .pb-note {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   font-size: 16px;
   color: var(--green);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pb-card, .pb-rocket, .pb-card.on, .pb-where { transition: none; animation: none; }
 }
 
 .rb-typeable {
@@ -2837,10 +2997,18 @@ button.brand {
   text-align: center;
 }
 
+@media (max-width: 900px) {
+  .pb-body { grid-template-columns: minmax(0, 1fr); }
+  .pb-rockets { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .pb-rocket { flex-shrink: 0; }
+}
+
 @media (max-width: 700px) {
   .parts-box {
     margin: 12px 16px 0;
   }
+  .pb-shelves { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pb-head small { display: none; }
 }
 
 /* ---------- Characters: small idle movements ---------- */
