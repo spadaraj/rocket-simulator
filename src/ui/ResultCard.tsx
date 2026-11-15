@@ -46,6 +46,8 @@ interface CardProps {
   onTryFix: (f: FixResult) => void;
   /** Extra line under the steps (the real-flight badge). */
   badge?: ReactNode;
+  /** Ghost and Guess: how the experiment came out. */
+  lab?: ReactNode;
 }
 
 const STEP_ICON: Record<MissionStep['id'], string> = { ascent: '🚀', systems: '🎧', recovery: '🪂', raise: '🛰️', moon: '🌕', planet: '🪐', reentry: '🔥' };
@@ -69,7 +71,7 @@ function Steps({ steps, roscoe }: { steps: MissionStep[]; roscoe: boolean }) {
   );
 }
 
-export function RoscoeResult({ fb, fix, steps, replays, onAgain, onTryFix, badge }: CardProps) {
+export function RoscoeResult({ fb, fix, steps, replays, onAgain, onTryFix, badge, lab }: CardProps) {
   const best = fix?.status === 'done' ? fix.fixes[0] : undefined;
   const tip = best ? `Try this: ${best.roscoe.toLowerCase()}.` : fb.roscoeFix;
   return (
@@ -81,6 +83,7 @@ export function RoscoeResult({ fb, fix, steps, replays, onAgain, onTryFix, badge
       </h2>
       <Steps steps={steps} roscoe />
       {fb.success && badge}
+      {lab}
       <p className="result-fix">{fix?.status === 'working' ? '🔧 Thinking of a fix…' : tip}</p>
       <div className="result-actions">
         {canSpeak && (
@@ -264,9 +267,11 @@ interface LessonProps {
   hint?: ReactNode;
   /** How this try compares with the last one. */
   note?: TryNote | null;
+  /** Ghost and Guess: how the experiment came out. */
+  lab?: ReactNode;
 }
 
-export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onShowMe, controls, hint, note }: LessonProps) {
+export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onShowMe, controls, hint, note, lab }: LessonProps) {
   const allowed = (c?: ControlId) => !controls || (!!c && controls.has(c));
   const working = fix?.status === 'done' ? fix.fixes.filter((f) => allowed(f.control)) : [];
   const testedFor = (c: ControlId) => working.find((f) => f.control === c);
@@ -285,6 +290,7 @@ export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onS
         </div>
       </div>
       {note && <ProgressNote note={note} meter={lesson.meter} />}
+      {lab}
       {lesson.meter && <MeterBar meter={lesson.meter} before={note?.same && note.changes.length ? note.before : undefined} />}
       <div className="lesson-why">
         <div className="result-kicker">🔬 Why</div>

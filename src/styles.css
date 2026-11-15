@@ -3116,3 +3116,145 @@ button.brand {
     linear-gradient(rgba(7, 29, 66, 0.62), rgba(7, 29, 66, 0.8)),
     var(--scene-hangar) center 35% / cover no-repeat;
 }
+
+/* ---------- Ghost and Guess: every launch is an experiment ---------- */
+.call-it {
+  width: min(560px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-fun);
+  font-size: 17px;
+  text-align: center;
+  display: grid;
+  gap: 8px;
+}
+
+.call-changes {
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 16px;
+  text-align: left;
+}
+
+.call-changes.clean {
+  background: rgba(60, 207, 122, 0.18);
+}
+
+.call-changes.muddy {
+  background: rgba(255, 176, 46, 0.16);
+}
+
+.call-picks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.call-picks .btn {
+  font-size: 17px;
+  padding: 10px 14px;
+}
+
+.call-picks .btn.on {
+  background: var(--amber);
+  border-color: #fff;
+  color: #1b2a44;
+  font-weight: 700;
+}
+
+.ghost-toggle {
+  justify-self: center;
+  opacity: 0.85;
+}
+
+.lab-note {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  font-size: 16px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.08);
+  border-left: 5px solid var(--ink-dim);
+}
+
+.lab-note.clean {
+  background: rgba(60, 207, 122, 0.18);
+  border-left-color: var(--green);
+}
+
+.lab-note.muddy {
+  background: rgba(255, 176, 46, 0.16);
+  border-left-color: var(--amber);
+}
+
+.lab-note p {
+  margin: 4px 0;
+}
+
+.lab-note small {
+  display: block;
+  margin-top: 2px;
+  opacity: 0.8;
+}
+
+/* On the cream mission cards the note needs ink, not white, text. */
+.sq-card .lab-note {
+  color: var(--sq-ink);
+  background: #fff8e6;
+}
+
+.sq-card .lab-note.clean {
+  background: #e3f3df;
+}
+
+.sq-card .lab-note.muddy {
+  background: #fdebc8;
+}
+
+.sq-lab {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: #fff8e6;
+  border: 2px dashed var(--sq-orange);
+  color: var(--sq-ink);
+}
+
+.sq-lab h3 {
+  margin: 0 0 4px;
+}
+
+.sq-lab-tally {
+  margin: 0 0 8px;
+}
+
+.sq-lab ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.sq-lab li {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-top: 1px solid rgba(31, 42, 34, 0.15);
+}
+
+.sq-lab li small {
+  opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+  .sq-lab li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

@@ -43,6 +43,8 @@ import type { ControlId } from './physics/controls';
 import { ScorecardBadge } from './ui/Scorecard';
 import { StageStrip } from './ui/StageStrip';
 import { autoSizeAsync, findFixesAsync } from './ui/whatIf';
+import { changesSince, judge, loadLab, record as recordLab, saveLab, type Flown, type Guess, type Lab, type Verdict } from './ui/lab';
+import { CallIt, LabNote } from './ui/LabNote';
 
 type Mode = 'roscoe' | 'engineer';
 type Phase = 'ready' | 'countdown' | 'flying' | 'raise' | 'moon' | 'planet' | 'reentry' | 'done';
@@ -80,6 +82,14 @@ function loadChaos(): boolean {
     return localStorage.getItem('chaos') === 'on';
   } catch {
     return false;
+  }
+}
+
+function loadGhost(): boolean {
+  try {
+    return localStorage.getItem('ghost') !== 'off';
+  } catch {
+    return true;
   }
 }
 
@@ -148,6 +158,14 @@ export default function App() {
   const [tryNote, setTryNote] = useState<TryNote | null>(null);
   // What "Let Did fix it" just changed, shown in the Build tab until the next launch.
   const [didFix, setDidFix] = useState<{ changes: Change[]; why?: string; rule?: string } | null>(null);
+  // Ghost and Guess: the last flight flown, the one this flight is racing, and Roscoe's call.
+  const [lastFlown, setLastFlown] = useState<Flown | null>(null);
+  const [rival, setRival] = useState<Flown | null>(null);
+  const [guess, setGuess] = useState<Guess | null>(null);
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [lab, setLab] = useState<Lab>(loadLab);
+  const [showGhost, setShowGhostState] = useState(loadGhost);
+  const judged = useRef<unknown>(null);
   const [line, setLine] = useState<string | null>(null);
   const firedLines = useRef(new Set<string>());
   const [mode, setModeState] = useState<Mode>(loadMode);
@@ -196,6 +214,15 @@ export default function App() {
     setSeed(newSeed());
     try {
       localStorage.setItem('chaos', on ? 'on' : 'off');
+    } catch {
+      /* storage unavailable: keep the in-memory choice */
+    }
+  };
+
+  const setShowGhost = (on: boolean) => {
+    setShowGhostState(on);
+    try {
+      localStorage.setItem('ghost', on ? 'on' : 'off');
     } catch {
       /* storage unavailable: keep the in-memory choice */
     }
@@ -318,6 +345,8 @@ export default function App() {
     setLine(null);
     setOutcome(null);
     setDidFix(null);
+    setRival(lastFlown);
+    setVerdict(null);
     setPhase('countdown');
   };
 
@@ -381,6 +410,10 @@ export default function App() {
     setAttempts(0);
     setOutcome(null);
     prevTry.current = null;
+    setLastFlown(null);
+    setRival(null);
+    setGuess(null);
+    setVerdict(null);
     setLastTry(null);
     setTryNote(null);
     setDidFix(null);
@@ -443,6 +476,23 @@ export default function App() {
         ? { text: `You did it! ${'★'.repeat(earned)}${earned < 3 ? ' Can you get more stars?' : ''}`, good: true }
         : { text: m ? `${what} ${m.label}: ${fmtMeter(m)} (${m.limitLabel} ${fmtMeter(m, m.limit)}).` : what, good: false },
     );
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ghost and Guess: when a flight is over, judge the experiment and remember the flight.
+  useEffect(() => {
+    if (phase !== 'done' || judged.current === mission) return;
+    judged.current = mission;
+    if (roscoe) {
+      const v = judge(rival, { spec, mission }, guess);
+      setVerdict(v);
+      if (v.guess || v.kind === 'clean') {
+        const next = recordLab(lab, v, inMission ? active!.title : 'Sandbox');
+        setLab(next);
+        saveLab(next);
+      }
+    }
+    setLastFlown({ spec, mission });
+    setGuess(null);
   }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A changed rocket is a new try.
@@ -511,6 +561,13 @@ export default function App() {
 
   const coachCtx: CoachContext = useMemo(() => ({ phase, tab, spec, speed: pb.speed }), [phase, tab, spec, pb.speed]);
 
+  // The ghost flies along only when this rocket differs from the last one flown.
+  const ghost = useMemo(
+    () => (roscoe && showGhost && rival && changesSince(rival.spec, spec).length ? { record: rival.mission.ascent, vehicle: buildVehicle(rival.spec, catalog) } : undefined),
+    [roscoe, showGhost, rival, spec],
+  );
+  const labNote = roscoe ? <LabNote verdict={verdict} /> : null;
+
   // Roscoe gets a big message when something surprising happens mid-flight.
   const toastEvent = record.events.find((e) => e.type === 'engineOut' && pb.t >= e.tS && pb.t < e.tS + 5);
   const toast = toastEvent ? 'Uh oh! An engine stopped! 😬' : null;
@@ -539,7 +596,8 @@ export default function App() {
   if (screen === 'home')
     return <Home progress={progress} onMissions={() => setScreen('map')} onSandbox={goSandbox} onSkills={() => setScreen('skills')} />;
   if (screen === 'map') return <MissionMap progress={progress} onPlay={startMission} onHome={() => setScreen('home')} />;
-  if (screen === 'skills') return <SkillBook progress={progress} onBack={() => setScreen('home')} />;
+  if (screen === 'skills') return <SkillBook progress={progress} lab={lab} onBack={() => setScreen('home')} />;
+
 
   // Mission Mode: Did's hint grows with each failed try, but only when the problem is the one
   // the mission is about; otherwise he points at what's still missing. On the third try he
@@ -781,6 +839,7 @@ export default function App() {
                   roscoe={roscoe}
                   armed={phase !== 'ready' && phase !== 'countdown'}
                   recoveries={mission.recoveries}
+                  ghost={phase === 'ready' || phase === 'countdown' ? undefined : ghost}
                 />
                 {roscoe && can('stageStrip') && (
                   <StageStrip
@@ -842,6 +901,8 @@ export default function App() {
 
             {phase === 'ready' && (
               <div className="launch-wrap">
+                {/* Not on a mission's first launch while Did is still showing the ropes. */}
+                {roscoe && !briefing && !(inMission && !lastFlown && coachSteps.length > 0) && <CallIt last={lastFlown} spec={spec} guess={guess} setGuess={setGuess} showGhost={showGhost} setShowGhost={setShowGhost} />}
                 <button className="launch-btn" data-coach="launch" onClick={launch}>
                   LAUNCH
                 </button>
@@ -861,6 +922,7 @@ export default function App() {
                 onRetry={() => setSpec({ ...spec })}
                 onMap={leaveMission}
                 replays={replays}
+                lab={labNote}
               />
             )}
             {phase === 'done' && inMission && outcome && !outcome.won && !lesson && (
@@ -873,6 +935,7 @@ export default function App() {
                   </div>
                 </div>
                 {tryNote && <ProgressNote note={tryNote} />}
+                {labNote}
                 {hint}
                 <div className="result-actions">
                   {!hint && (
@@ -898,6 +961,7 @@ export default function App() {
                 controls={controls}
                 hint={hint}
                 note={inMission ? tryNote : null}
+                lab={labNote}
               />
             )}
             {phase === 'done' && roscoe && !inMission && !lesson && (
@@ -909,6 +973,7 @@ export default function App() {
                 onAgain={again}
                 onTryFix={tryFix}
                 badge={realFlight && <ScorecardBadge card={realFlight} modified={modified} />}
+                lab={labNote}
               />
             )}
 

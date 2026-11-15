@@ -19,6 +19,8 @@ interface Props {
   armed: boolean;
   /** Boosters and stages falling back after separation. */
   recoveries: RecoveryTrack[];
+  /** The last flight, flying alongside as a see-through ghost to compare with. */
+  ghost?: { record: FlightRecord; vehicle: Vehicle };
 }
 
 /** Interpolated position of a falling piece (Earth-fixed samples). */
@@ -232,7 +234,7 @@ function mixColor(a: [number, number, number], b: [number, number, number], f: n
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
-export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed, recoveries }: Props) {
+export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed, recoveries, ghost }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const camRef = useRef<Camera | null>(null);
 
@@ -258,6 +260,16 @@ export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed,
       const sa = Math.sin(a);
       return { ...p, xM: p.xM * ca - p.yM * sa, yM: p.xM * sa + p.yM * ca, ux: p.ux * ca - p.uy * sa, uy: p.ux * sa + p.uy * ca };
     });
+    const toFixed = (p: Sample): Sample => {
+      const a = omega * p.tS;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      return { ...p, xM: p.xM * ca - p.yM * sa, yM: p.xM * sa + p.yM * ca, ux: p.ux * ca - p.uy * sa, uy: p.ux * sa + p.uy * ca };
+    };
+    const ghostSamples = ghost?.record.samples.map(toFixed);
+    const ghostFailure = ghost?.record.outcome.failure;
+    // The ghost stops where its flight ended (a rocket that never left the pad has no ghost flight).
+    const ghostEndT = ghost ? (ghostFailure && ghostFailure.type !== 'noLiftoff' ? ghostFailure.tS : ghost.record.durationS) : 0;
     const pieces = recoveries.map((tr) => ({
       track: tr,
       color: tr.kind === 'boosters' ? '#f4f6fa' : vehicle.stages[tr.stageIndex].color,
@@ -313,6 +325,14 @@ export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed,
         maxX = Math.max(maxX, p.xM);
         minY = Math.min(minY, p.yM);
         maxY = Math.max(maxY, p.yM);
+      }
+      // Keep the ghost in the picture too, so the race can be seen.
+      if (ghostSamples) {
+        const gp = sampleAt(ghostSamples, Math.min(s.tS, ghostEndT));
+        minX = Math.min(minX, gp.xM);
+        maxX = Math.max(maxX, gp.xM);
+        minY = Math.min(minY, gp.yM);
+        maxY = Math.max(maxY, gp.yM);
       }
       const mx = (minX + maxX) / 2;
       const my = (minY + maxY) / 2;
@@ -529,6 +549,56 @@ export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed,
       if (started) ctx.lineTo(rx, ry);
       ctx.stroke();
 
+      // ---- the ghost of the last flight: a pale dashed path and a see-through rocket ----
+      if (ghost && ghostSamples && t > 0) {
+        const gt = Math.min(t, ghostEndT);
+        const gs = sampleAt(ghostSamples, gt);
+        const gstep = Math.max(1, Math.floor(ghostSamples.length / 800));
+        ctx.strokeStyle = 'rgba(200,225,255,0.6)';
+        ctx.lineWidth = 2.5 * dpr;
+        ctx.setLineDash([3 * dpr, 7 * dpr]);
+        ctx.beginPath();
+        const [g0x, g0y] = toScreen(ghostSamples[0].xM, ghostSamples[0].yM);
+        ctx.moveTo(g0x, g0y);
+        for (let i = gstep; i < ghostSamples.length && ghostSamples[i].tS <= gt; i += gstep) {
+          const [px, py] = toScreen(ghostSamples[i].xM, ghostSamples[i].yM);
+          ctx.lineTo(px, py);
+        }
+        const [gx, gy] = toScreen(gs.xM, gs.yM);
+        ctx.lineTo(gx, gy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const over = t > ghostEndT;
+        const gv = ghost.vehicle;
+        const gvis = { stageIndex: gs.stageIndex, boostersAttached: gs.boostersAttached, jettisoned: new Set<string>(), flame: 0 };
+        const ghM = visibleHeightM(gv, gvis) || gv.heightM;
+        const gscale = Math.max(c.k, ((roscoe ? 64 : 44) * dpr) / ghM);
+        ctx.save();
+        ctx.globalAlpha = over ? 0.25 : 0.45;
+        ctx.translate(gx, gy);
+        ctx.rotate(Math.atan2(gs.ux * cr - gs.uy * sr, gs.ux * sr + gs.uy * cr));
+        ctx.scale(gscale, gscale);
+        ctx.translate(0, Math.min(1, gs.altitudeM / (ghM * 3)) * (ghM / 2));
+        drawRocket(ctx, gv, gvis, 1.2 / (gscale / dpr), now / 1000);
+        ctx.restore();
+        // A name tag, once the two rockets have drifted apart enough to tell them apart.
+        const [nx, ny] = toScreen(sf.xM, sf.yM);
+        if (Math.hypot(gx - nx, gy - ny) > 30 * dpr) {
+          ctx.fillStyle = 'rgba(232,240,255,0.9)';
+          ctx.font = `bold ${13 * dpr}px system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          const tag = over ? '👻 last flight ended here' : '👻 last flight';
+          const ty = gy - (ghM * gscale) / 2 - 8 * dpr;
+          // A dark outline keeps the tag readable on the pale daytime sky.
+          ctx.strokeStyle = 'rgba(7,29,66,0.85)';
+          ctx.lineWidth = 4 * dpr;
+          ctx.lineJoin = 'round';
+          ctx.strokeText(tag, gx, ty);
+          ctx.fillText(tag, gx, ty);
+          ctx.textAlign = 'start';
+        }
+      }
+
       // ---- staging puffs ----
       for (const ts of stagingTimes) {
         const age = t - ts;
@@ -735,7 +805,7 @@ export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed,
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, [record, vehicle, tRef, launchSite, roscoe, armed, recoveries]);
+  }, [record, vehicle, tRef, launchSite, roscoe, armed, recoveries, ghost]);
 
   return <canvas ref={canvasRef} className="flight-canvas" aria-label="Rocket flight view" />;
 }

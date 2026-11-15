@@ -1,6 +1,7 @@
 // Mission Mode screens: the Space Q home, the mission map, briefings, debriefs and the Skill Book.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import type { Lab } from '../lab';
 import { CONTROL_INFO } from '../../missions/controlInfo';
 import { CHAPTERS, MISSIONS } from '../../missions/missions';
 import { learnedSkills, rank, totalStars, upNext, type Progress } from '../../missions/progress';
@@ -172,6 +173,7 @@ export function Debrief({
   onRetry,
   onMap,
   replays,
+  lab,
 }: {
   mission: Mission;
   earned: number;
@@ -181,6 +183,7 @@ export function Debrief({
   onRetry: () => void;
   onMap: () => void;
   replays: { label: string; onClick: () => void }[];
+  lab?: ReactNode;
 }) {
   const skill = SKILLS[mission.skill];
   const text = `${mission.debrief} You learned: ${skill.title}. ${skill.text}`;
@@ -209,6 +212,7 @@ export function Debrief({
           </li>
         ))}
       </ul>
+      {lab}
       <div className="sq-talk small">
         <Did size={64} />
         <p className="sq-bubble">{mission.debrief}</p>
@@ -252,7 +256,7 @@ export function Debrief({
 
 // ---------- Skill Book ----------
 
-export function SkillBook({ progress, onBack }: { progress: Progress; onBack: () => void }) {
+export function SkillBook({ progress, lab, onBack }: { progress: Progress; lab: Lab; onBack: () => void }) {
   const learned = new Set<SkillId>(learnedSkills(progress));
   const all = Object.values(SKILLS);
   return (
@@ -267,6 +271,25 @@ export function SkillBook({ progress, onBack }: { progress: Progress; onBack: ()
           {learned.size} of {all.length} learned
         </span>
       </div>
+      <section className="sq-lab">
+        <h3>🔬 Lab Notes: what your own tests found</h3>
+        <p className="sq-lab-tally">
+          🧪 Clean tests: <b>{lab.clean}</b> · 🎯 Guesses right: <b>{lab.right}</b> of {lab.guesses} · 😮 Surprises: <b>{lab.guesses - lab.right}</b>
+        </p>
+        {lab.findings.length ? (
+          <ul>
+            {lab.findings.map((f) => (
+              <li key={f.change}>
+                <b>{f.change}</b>
+                <span>{f.effect}</span>
+                <small>{f.where}</small>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>Nothing here yet. Change just one thing on a rocket, fly it again, and what you find out gets written down here.</p>
+        )}
+      </section>
       <div className="sq-skill-grid">
         {all.map((s) =>
           learned.has(s.id) ? (
