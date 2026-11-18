@@ -20,7 +20,7 @@ interface Props {
   /** Boosters and stages falling back after separation. */
   recoveries: RecoveryTrack[];
   /** The last flight, flying alongside as a see-through ghost to compare with. */
-  ghost?: { record: FlightRecord; vehicle: Vehicle };
+  ghost?: { record: FlightRecord; vehicle: Vehicle; /** Name tags, if not "last flight". */ label?: string; endLabel?: string };
 }
 
 /** Interpolated position of a falling piece (Earth-fixed samples). */
@@ -587,7 +587,7 @@ export function FlightCanvas({ record, vehicle, tRef, launchSite, roscoe, armed,
           ctx.fillStyle = 'rgba(232,240,255,0.9)';
           ctx.font = `bold ${13 * dpr}px system-ui, sans-serif`;
           ctx.textAlign = 'center';
-          const tag = over ? '👻 last flight ended here' : '👻 last flight';
+          const tag = over ? (ghost.endLabel ?? '👻 last flight ended here') : (ghost.label ?? '👻 last flight');
           const ty = gy - (ghM * gscale) / 2 - 8 * dpr;
           // A dark outline keeps the tag readable on the pale daytime sky.
           ctx.strokeStyle = 'rgba(7,29,66,0.85)';

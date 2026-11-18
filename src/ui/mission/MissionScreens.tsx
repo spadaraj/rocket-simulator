@@ -33,7 +33,19 @@ function useReadAloud(text: string, on = true) {
 
 // ---------- Home ----------
 
-export function Home({ progress, onMissions, onSandbox, onSkills }: { progress: Progress; onMissions: () => void; onSandbox: () => void; onSkills: () => void }) {
+export function Home({
+  progress,
+  onMissions,
+  onSandbox,
+  onSkills,
+  onDetective,
+}: {
+  progress: Progress;
+  onMissions: () => void;
+  onSandbox: () => void;
+  onSkills: () => void;
+  onDetective: () => void;
+}) {
   return (
     <div className="sq-screen sq-home">
       <div className="sq-home-roscoe">
@@ -51,6 +63,10 @@ export function Home({ progress, onMissions, onSandbox, onSkills }: { progress: 
         <button className="sq-big" onClick={onSandbox}>
           🛠️ Sandbox
           <small>Build and fly anything</small>
+        </button>
+        <button className="sq-big" onClick={onDetective}>
+          🕵️ Crash Detective
+          <small>Find out why the rocket failed</small>
         </button>
         <button className="sq-small" onClick={onSkills}>
           📖 Skill Book

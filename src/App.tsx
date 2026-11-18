@@ -4,6 +4,7 @@ import { stageDeltaV } from './physics/deltaV';
 import { blankRocket, setMission } from './physics/edit';
 import { goldenFor, scorecard } from './physics/golden';
 import { rollFaults } from './physics/faults';
+import { Detective } from './ui/detective/Detective';
 import type { FixResult } from './physics/fixes';
 import { flyMission } from './physics/mission';
 import type { RocketSpec } from './physics/types';
@@ -49,7 +50,7 @@ import { CallIt, LabNote } from './ui/LabNote';
 type Mode = 'roscoe' | 'engineer';
 type Phase = 'ready' | 'countdown' | 'flying' | 'raise' | 'moon' | 'planet' | 'reentry' | 'done';
 type Scene = 'flight' | 'raise' | 'moon' | 'planet' | 'reentry';
-type Screen = 'home' | 'map' | 'skills' | 'sandbox' | 'mission';
+type Screen = 'home' | 'map' | 'skills' | 'sandbox' | 'mission' | 'detective';
 
 const NO_STATS: PlayStats = { usedSlow: false, chaos: false, saved: false };
 
@@ -594,7 +595,8 @@ export default function App() {
   ];
 
   if (screen === 'home')
-    return <Home progress={progress} onMissions={() => setScreen('map')} onSandbox={goSandbox} onSkills={() => setScreen('skills')} />;
+    return <Home progress={progress} onMissions={() => setScreen('map')} onSandbox={goSandbox} onSkills={() => setScreen('skills')} onDetective={() => setScreen('detective')} />;
+  if (screen === 'detective') return <Detective onHome={() => setScreen('home')} />;
   if (screen === 'map') return <MissionMap progress={progress} onPlay={startMission} onHome={() => setScreen('home')} />;
   if (screen === 'skills') return <SkillBook progress={progress} lab={lab} onBack={() => setScreen('home')} />;
 
