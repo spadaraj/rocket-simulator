@@ -3,21 +3,28 @@
 
 import { ALL_CONTROLS, type ControlId } from '../physics/controls';
 import { MISSIONS, RANKS } from './missions';
+import type { Level } from './level';
 import type { SkillId } from './skills';
 
 const KEY = 'spaceq-progress';
 
 export interface Progress {
+  /** Best stars per mission at any level: these decide rank, skills and what is "up next". */
   stars: Record<string, number>;
+  /** Best stars per mission at each level. Saves from before levels existed count as Medium. */
+  levels: Record<Level, Record<string, number>>;
 }
+
+const starMap = (x: unknown): Record<string, number> => (typeof x === 'object' && x ? (x as Record<string, number>) : {});
 
 export function loadProgress(): Progress {
   try {
     const p = JSON.parse(localStorage.getItem(KEY) ?? '{}');
-    const stars = typeof p.stars === 'object' && p.stars ? p.stars : {};
-    return { stars };
+    const stars = starMap(p.stars);
+    const l = p.levels;
+    return { stars, levels: l ? { easy: starMap(l.easy), medium: starMap(l.medium), hard: starMap(l.hard) } : { easy: {}, medium: stars, hard: {} } };
   } catch {
-    return { stars: {} };
+    return { stars: {}, levels: { easy: {}, medium: {}, hard: {} } };
   }
 }
 
@@ -29,6 +36,12 @@ export function saveProgress(p: Progress) {
   } catch {
     /* storage unavailable: progress lasts for this visit */
   }
+}
+
+/** Record stars for a mission at a level, keeping the best. */
+export function withStars(p: Progress, missionId: string, level: Level, earned: number): Progress {
+  const best = (m: Record<string, number>) => ({ ...m, [missionId]: Math.max(earned, m[missionId] ?? 0) });
+  return { stars: best(p.stars), levels: { ...p.levels, [level]: best(p.levels[level]) } };
 }
 
 /** The first mission with no stars yet: where Roscoe probably left off. */

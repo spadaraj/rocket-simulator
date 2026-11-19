@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { FixResult } from '../physics/fixes';
 import type { MissionStep } from '../physics/mission';
 import type { ControlId } from '../physics/controls';
+import type { Level } from '../missions/level';
 import { SKILLS } from '../missions/skills';
 import type { Change } from './changes';
 import { fmtMeter, meterBetter, type Lesson, type Meter } from './lessons';
@@ -48,6 +49,10 @@ interface CardProps {
   badge?: ReactNode;
   /** Ghost and Guess: how the experiment came out. */
   lab?: ReactNode;
+  /** Did's tested clue, shown in place of the one-line tip. */
+  hint?: ReactNode;
+  /** Hard: no button that makes the fix for him. */
+  noAutoFix?: boolean;
 }
 
 const STEP_ICON: Record<MissionStep['id'], string> = { ascent: '🚀', systems: '🎧', recovery: '🪂', raise: '🛰️', moon: '🌕', planet: '🪐', reentry: '🔥' };
@@ -71,8 +76,8 @@ function Steps({ steps, roscoe }: { steps: MissionStep[]; roscoe: boolean }) {
   );
 }
 
-export function RoscoeResult({ fb, fix, steps, replays, onAgain, onTryFix, badge, lab }: CardProps) {
-  const best = fix?.status === 'done' ? fix.fixes[0] : undefined;
+export function RoscoeResult({ fb, fix, steps, replays, onAgain, onTryFix, badge, lab, hint, noAutoFix }: CardProps) {
+  const best = fix?.status === 'done' && !noAutoFix ? fix.fixes[0] : undefined;
   const tip = best ? `Try this: ${best.roscoe.toLowerCase()}.` : fb.roscoeFix;
   return (
     <div className={`result-card roscoe ${fb.success ? 'win' : 'lose'}`}>
@@ -84,7 +89,7 @@ export function RoscoeResult({ fb, fix, steps, replays, onAgain, onTryFix, badge
       <Steps steps={steps} roscoe />
       {fb.success && badge}
       {lab}
-      <p className="result-fix">{fix?.status === 'working' ? '🔧 Thinking of a fix…' : tip}</p>
+      {!fb.success && hint ? hint : <p className="result-fix">{fix?.status === 'working' ? '🔧 Thinking of a fix…' : tip}</p>}
       <div className="result-actions">
         {canSpeak && (
           <button className="btn big" onClick={() => speak(`${fb.roscoeTitle} ${tip}`)} aria-label="Read aloud">
@@ -269,17 +274,21 @@ interface LessonProps {
   note?: TryNote | null;
   /** Ghost and Guess: how the experiment came out. */
   lab?: ReactNode;
+  level: Level;
+  /** The first step of Did's tested plan, for "Let Did fix it". */
+  planFix?: FixResult;
 }
 
-export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onShowMe, controls, hint, note, lab }: LessonProps) {
+export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onShowMe, controls, hint, note, lab, level, planFix }: LessonProps) {
   const allowed = (c?: ControlId) => !controls || (!!c && controls.has(c));
   const working = fix?.status === 'done' ? fix.fixes.filter((f) => allowed(f.control)) : [];
   const testedFor = (c: ControlId) => working.find((f) => f.control === c);
   // Fixes Did has tried and seen work go first.
   const fixes = lesson.fixes.filter((f) => allowed(f.control)).sort((a, b) => Number(!!testedFor(b.control)) - Number(!!testedFor(a.control)));
-  const tested = working[0];
+  // Hard: Roscoe makes every fix himself.
+  const tested = level === 'hard' ? undefined : (planFix ?? working[0]);
   const skill = SKILLS[lesson.skill];
-  const readAloud = `${lesson.what} ${lesson.why.join(' ')} ${lesson.analogy ?? ''} How to fix it: ${fixes.map((f) => f.text).join(' ')}`;
+  const readAloud = `${lesson.what} ${lesson.why.join(' ')} ${lesson.analogy ?? ''}${level === 'easy' ? '' : ` How to fix it: ${fixes.map((f) => f.text).join(' ')}`}`;
   return (
     <div className="result-card roscoe lose lesson">
       <div className="lesson-head">
@@ -305,6 +314,8 @@ export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onS
         {lesson.analogy && <p>{lesson.analogy}</p>}
       </div>
       {hint}
+      {/* Easy: Did's tested clue is the one thing to try, not a list to choose from. */}
+      {level !== 'easy' && (
       <div className="lesson-fixes">
         <div className="result-kicker">🔧 How you can fix it</div>
         <ul>
@@ -316,15 +327,18 @@ export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onS
                   {f.text}
                   {t && <small className="lesson-tested">✅ Did tried it and it works: {t.roscoe.toLowerCase()}</small>}
                 </span>
-                <button className="btn small" onClick={() => onShowMe(f.control)}>
-                  👉 Show me
-                </button>
+                {level !== 'hard' && (
+                  <button className="btn small" onClick={() => onShowMe(f.control)}>
+                    👉 Show me
+                  </button>
+                )}
               </li>
             );
           })}
         </ul>
         {fix?.status === 'working' && <p className="lesson-testing">🔧 Did is testing fixes…</p>}
       </div>
+      )}
       {steps.length > 1 && <Steps steps={steps} roscoe />}
       <div className="result-actions">
         {canSpeak && (

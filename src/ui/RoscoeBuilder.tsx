@@ -27,7 +27,9 @@ import {
   stageTank,
   tuneEngine,
 } from '../physics/edit';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
+import { CONTROL_INFO } from '../missions/controlInfo';
+import type { PayloadSlot } from '../physics/edit';
 import type { ControlId } from '../physics/controls';
 import { engineWarnings, worstLevel } from '../physics/design';
 import { goesToMoon } from '../physics/raise';
@@ -62,15 +64,71 @@ interface Props {
   changed?: Set<ControlId>;
   /** Sandbox: no caps on how much of anything, and numbers can be typed in. */
   unlimited?: boolean;
+  liftoffMassKg: number;
+  /** Say under each dial what it is for. */
+  explain?: boolean;
+  /** Easy: only these "On top" rows show (all of them when absent). */
+  slots?: Set<PayloadSlot>;
 }
 
-const Gate = createContext<{ controls?: Set<ControlId>; fresh?: Set<ControlId>; changed?: Set<ControlId> }>({});
+/** What the last tap on a dial did to the rocket. */
+interface Effect {
+  row: string;
+  lines: string[];
+}
+
+interface Reading {
+  twr: number;
+  massKg: number;
+  dv: number;
+}
+
+/** What changed between two readings of the rocket, in plain words. */
+export function effectLines(before: Reading, after: Reading): string[] {
+  const out: string[] = [];
+  if (Math.abs(after.twr - before.twr) > 0.005) {
+    const crossed = before.twr <= 1 && after.twr > 1 ? ' Now it can lift off!' : before.twr > 1 && after.twr <= 1 ? ' Now it is too heavy to lift off!' : '';
+    out.push(`💪 Push compared with weight: ${before.twr.toFixed(2)}× → ${after.twr.toFixed(2)}×.${crossed}`);
+  }
+  if (Math.abs(after.massKg - before.massKg) > 500)
+    out.push(`⚖️ Weight: ${Math.round(before.massKg / 1000).toLocaleString()} t → ${Math.round(after.massKg / 1000).toLocaleString()} t.`);
+  const change = before.dv > 0 ? (after.dv - before.dv) / before.dv : 0;
+  if (Math.abs(change) > 0.005) out.push(`⚡ Power (how far it can go): ${change > 0 ? 'up' : 'down'} ${Math.max(1, Math.round(Math.abs(change) * 100))}%.`);
+  return out.length ? out : ['No change to push, weight or power.'];
+}
+
+const Gate = createContext<{
+  controls?: Set<ControlId>;
+  fresh?: Set<ControlId>;
+  changed?: Set<ControlId>;
+  explain?: boolean;
+  effect?: Effect | null;
+  touch?: (row: string) => void;
+}>({});
 
 /** Whether a control is shown, and whether it is new, in Mission Mode. */
 function useGate(id?: ControlId) {
   const g = useContext(Gate);
-  if (!id) return { show: true, cls: '' };
-  return { show: !g.controls || g.controls.has(id), cls: g.changed?.has(id) ? ' changed' : g.fresh?.has(id) ? ' fresh' : '' };
+  const row = useId();
+  /** Run a dial's action, remembering which row was tapped so its effect can be shown there. */
+  const tap = (fn: () => void) => () => {
+    g.touch?.(row);
+    fn();
+  };
+  const extras = (mark: boolean) => (
+    <>
+      {id && mark && g.explain && <small className="rb-explain">{CONTROL_INFO[id].explain}</small>}
+      {g.effect?.row === row && (
+        <div className="rb-effect" role="status">
+          {g.effect.lines.map((l) => (
+            <span key={l}>{l}</span>
+          ))}
+        </div>
+      )}
+    </>
+  );
+  if (!id) return { show: true, cls: '', tap, extras };
+  return { show: !g.controls || g.controls.has(id), cls: g.changed?.has(id) ? ' changed' : g.fresh?.has(id) ? ' fresh' : '', tap, extras };
 }
 
 const ENGINES = liquidEngines(catalog);
@@ -161,10 +219,11 @@ function Toggle({ label, on, onChange, hint, id, mark = true }: { label: string;
   return (
     <div className={`rb-row${g.cls}`} data-coach={mark ? id : undefined}>
       <span className="rb-label">{label}</span>
-      <button className={`rb-toggle ${on ? 'on' : ''}`} onClick={() => onChange(!on)} aria-pressed={on}>
+      <button className={`rb-toggle ${on ? 'on' : ''}`} onClick={g.tap(() => onChange(!on))} aria-pressed={on}>
         {on ? 'Yes' : 'No'}
       </button>
       {hint && <span className="rb-hint">{hint}</span>}
+      {g.extras(mark)}
     </div>
   );
 }
@@ -186,13 +245,13 @@ function Stepper({ label, value, onMinus, onPlus, id, mark = true, typed }: Step
   if (!g.show) return null;
   const commit = () => {
     const n = Number(editing);
-    if (typed && editing !== null && editing.trim() !== '' && Number.isFinite(n) && n >= 0) typed.onSet(n);
+    if (typed && editing !== null && editing.trim() !== '' && Number.isFinite(n) && n >= 0) g.tap(() => typed.onSet(n))();
     setEditing(null);
   };
   return (
     <div className={`rb-row${g.cls}`} data-coach={mark ? id : undefined}>
       <span className="rb-label">{label}</span>
-      <button className="rb-btn" onClick={onMinus} aria-label={`${label} less`}>
+      <button className="rb-btn" onClick={g.tap(onMinus)} aria-label={`${label} less`}>
         −
       </button>
       {typed && editing !== null ? (
@@ -218,9 +277,10 @@ function Stepper({ label, value, onMinus, onPlus, id, mark = true, typed }: Step
       ) : (
         <span className="rb-value">{value}</span>
       )}
-      <button className="rb-btn" onClick={onPlus} aria-label={`${label} more`}>
+      <button className="rb-btn" onClick={g.tap(onPlus)} aria-label={`${label} more`}>
         +
       </button>
+      {g.extras(mark)}
     </div>
   );
 }
@@ -261,19 +321,31 @@ function Tinker({ spec, setSpec, i }: { spec: RocketSpec; setSpec: (s: RocketSpe
   );
 }
 
-function Chooser({ label, value, onPrev, onNext, id, mark = true }: { label: string; value: string; onPrev: () => void; onNext: () => void; id?: ControlId; mark?: boolean }) {
+interface ChooserProps {
+  label: string;
+  value: string;
+  onPrev: () => void;
+  onNext: () => void;
+  id?: ControlId;
+  mark?: boolean;
+  /** Whether this row carries the dial's explanation (by default, the row Did points at). */
+  explain?: boolean;
+}
+
+function Chooser({ label, value, onPrev, onNext, id, mark = true, explain = mark }: ChooserProps) {
   const g = useGate(id);
   if (!g.show) return null;
   return (
     <div className={`rb-row${g.cls}`} data-coach={mark ? id : undefined}>
       <span className="rb-label">{label}</span>
-      <button className="rb-btn" onClick={onPrev} aria-label={`Previous ${label}`}>
+      <button className="rb-btn" onClick={g.tap(onPrev)} aria-label={`Previous ${label}`}>
         ◀
       </button>
       <span className="rb-value wide">{value}</span>
-      <button className="rb-btn" onClick={onNext} aria-label={`Next ${label}`}>
+      <button className="rb-btn" onClick={g.tap(onNext)} aria-label={`Next ${label}`}>
         ▶
       </button>
+      {g.extras(explain)}
     </div>
   );
 }
@@ -287,6 +359,20 @@ export function RoscoeBuilder(p: Props) {
   const meterMax = moonDv * 1.3;
   const canLift = p.liftoffTWR > 1;
   const free = !!p.unlimited;
+
+  // After a tap on a dial, show next to it what that did to push, weight and power.
+  const reading: Reading = { twr: p.liftoffTWR, massKg: p.liftoffMassKg, dv: totalDv };
+  const tapped = useRef<{ row: string; before: Reading } | null>(null);
+  const [effect, setEffect] = useState<Effect | null>(null);
+  const touch = (row: string) => {
+    tapped.current = { row, before: reading };
+  };
+  useEffect(() => {
+    const t = tapped.current;
+    if (!t) return;
+    tapped.current = null;
+    setEffect({ row: t.row, lines: effectLines(t.before, reading) });
+  }, [spec]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Mission caps; the Sandbox has none. */
   const cap = (n: number, max: number) => (free ? n : Math.min(max, n));
 
@@ -325,7 +411,7 @@ export function RoscoeBuilder(p: Props) {
         : 'space';
 
   return (
-    <Gate.Provider value={{ controls: p.controls, fresh: p.fresh, changed: p.changed }}>
+    <Gate.Provider value={{ controls: p.controls, fresh: p.fresh, changed: p.changed, explain: p.explain, effect, touch }}>
     <div className="roscoe-builder">
       <div className="rb-preview">
         <RocketThumb vehicle={p.vehicle} height={420} />
@@ -376,12 +462,13 @@ export function RoscoeBuilder(p: Props) {
             onNext={() => setSpec(setMission(spec, { targetOrbitAltitudeM: 1000 * (HEIGHTS_KM.find((h) => h > heightKm) ?? HEIGHTS_KM[HEIGHTS_KM.length - 1]) }))}
           />
           {can('payload') && <div className="rb-title small">On top</div>}
-          {PAYLOAD_SLOTS.filter((slot) => slot.slot !== 'orbiter' || !p.controls).map((slot) => {
+          {PAYLOAD_SLOTS.filter((slot) => (slot.slot !== 'orbiter' || !p.controls) && (!p.slots || p.slots.has(slot.slot))).map((slot) => {
             const current = payloadSlot(spec, slot.slot) ?? null;
             const options: (string | null)[] = [null, ...slot.parts.filter((id) => id === current || !PART_CONTROL[id] || can(PART_CONTROL[id]))];
             return (
               <Chooser
                 key={slot.slot}
+                explain={slot.slot === 'lander' || slot.slot === 'kick' || slot.slot === 'cargo'}
                 id={slot.slot === 'lander' ? 'lander' : slot.slot === 'kick' ? 'kickStage' : 'payload'}
                 label={slot.roscoe}
                 value={current ? MODULE_NAMES[current] ?? resolveCatalog(spec, catalog)[current]?.name ?? current : 'None'}
@@ -447,7 +534,7 @@ export function RoscoeBuilder(p: Props) {
                   <Stepper
                     id="engines"
                     mark={i === 0}
-                    label="How many"
+                    label="How many engines"
                     value={String(eng.ref.count ?? 1)}
                     onMinus={() => setSpec(setEngineCount(spec, catalog, i, (eng.ref.count ?? 1) - 1))}
                     onPlus={() => setSpec(setEngineCount(spec, catalog, i, cap((eng.ref.count ?? 1) + 1, Math.max(40, eng.ref.count ?? 1))))}

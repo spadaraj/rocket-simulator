@@ -3,6 +3,7 @@
 // the test was clean (one change, so we know what it did) or muddy (several, so we can't).
 
 import type { MissionRecord } from '../physics/mission';
+import type { ControlId } from '../physics/controls';
 import type { RocketSpec } from '../physics/types';
 import { describeChanges, type Change } from './changes';
 
@@ -99,9 +100,12 @@ export function compareFlights(prev: MissionRecord, now: MissionRecord): Compare
 const flightKey = (s: RocketSpec) => JSON.stringify([s.stages, s.payload.parts, s.payload.heatShieldScale ?? 1, s.mission, s.customParts ?? [], s.structureScale ?? 1, s.launchSite]);
 
 /** What differs between the last rocket flown and this one. Empty means it is the same rocket. */
-export function changesSince(prev: RocketSpec, now: RocketSpec): Change[] {
+export function changesSince(prev: RocketSpec, now: RocketSpec, ignore?: Set<ControlId>): Change[] {
   if (prev === now || flightKey(prev) === flightKey(now)) return [];
-  const list = describeChanges(prev, now);
+  const all = describeChanges(prev, now);
+  // Changes the game made by itself (dials it looks after on Easy) are not Roscoe's experiment.
+  const list = ignore?.size ? all.filter((c) => !c.control || !ignore.has(c.control)) : all;
+  if (all.length && !list.length) return [];
   // Something changed that has no plain-words name (a redesigned engine, say).
   return list.length ? list : [{ text: 'Changed the design' }];
 }
@@ -123,13 +127,13 @@ export interface Verdict {
 
 const problemOf = (m: MissionRecord) => m.result.failure?.type;
 
-export function judge(prev: Flown | null, now: Flown, guess: Guess | null): Verdict {
+export function judge(prev: Flown | null, now: Flown, guess: Guess | null, ignore?: Set<ControlId>): Verdict {
   if (!prev) {
     const r = reachOf(now.mission);
     const pick = REACHES.find((x) => x.id === guess);
     return { kind: 'first', changes: [], guess: pick ? { said: pick.label.toLowerCase(), right: pick.id === r, got: REACHES.find((x) => x.id === r)!.label.toLowerCase() } : undefined };
   }
-  const changes = changesSince(prev.spec, now.spec);
+  const changes = changesSince(prev.spec, now.spec, ignore);
   if (!changes.length) return { kind: 'same', changes };
   const compare = compareFlights(prev.mission, now.mission);
   const before = problemOf(prev.mission);

@@ -2,6 +2,7 @@
 // result card that says whether the test was clean and whether the guess was right.
 
 import { REACHES, askFor, changesSince, effectText, type Flown, type Guess, type Verdict } from './lab';
+import type { ControlId } from '../physics/controls';
 import type { RocketSpec } from '../physics/types';
 
 const DIRS = ['up', 'same', 'down'] as const;
@@ -15,11 +16,13 @@ interface CallItProps {
   setGuess: (g: Guess | null) => void;
   showGhost: boolean;
   setShowGhost: (on: boolean) => void;
+  /** Dials the game looks after by itself: changes to them do not count. */
+  ignore?: Set<ControlId>;
 }
 
 /** Above the launch button: what changed since the last flight, and a guess to make. Skippable. */
-export function CallIt({ last, spec, guess, setGuess, showGhost, setShowGhost }: CallItProps) {
-  const changes = last ? changesSince(last.spec, spec) : [];
+export function CallIt({ last, spec, guess, setGuess, showGhost, setShowGhost, ignore }: CallItProps) {
+  const changes = last ? changesSince(last.spec, spec, ignore) : [];
   // The same rocket again: nothing to test, nothing to guess.
   if (last && !changes.length) return null;
   const pick = (g: Guess) => setGuess(guess === g ? null : g);

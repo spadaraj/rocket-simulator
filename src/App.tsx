@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { catalog, presets } from './data/catalog';
 import { stageDeltaV } from './physics/deltaV';
-import { blankRocket, setMission } from './physics/edit';
+import { addStage, blankRocket, setMission } from './physics/edit';
 import { goldenFor, scorecard } from './physics/golden';
 import { rollFaults } from './physics/faults';
 import { Detective } from './ui/detective/Detective';
@@ -38,12 +38,15 @@ import { SKILLS } from './missions/skills';
 import { CONTROL_INFO } from './missions/controlInfo';
 import { introSteps } from './missions/intro';
 import { MISSIONS } from './missions/missions';
-import { controlsFor, loadProgress, saveProgress, type Progress } from './missions/progress';
+import { loadProgress, saveProgress, withStars, type Progress } from './missions/progress';
+import { CARE_FAILURES, caredFor, loadLevel, saveLevel, visibleControls, visibleSlots, watchEndS, type Level } from './missions/level';
+import { Clue, type PlanState } from './ui/mission/Clue';
+import type { Plan } from './physics/plan';
 import type { CoachContext, Mission, PlayStats } from './missions/types';
 import type { ControlId } from './physics/controls';
 import { ScorecardBadge } from './ui/Scorecard';
 import { StageStrip } from './ui/StageStrip';
-import { autoSizeAsync, findFixesAsync } from './ui/whatIf';
+import { autoSizeAsync, findFixesAsync, planFixesAsync } from './ui/whatIf';
 import { changesSince, judge, loadLab, record as recordLab, saveLab, type Flown, type Guess, type Lab, type Verdict } from './ui/lab';
 import { CallIt, LabNote } from './ui/LabNote';
 
@@ -170,10 +173,24 @@ export default function App() {
   const [line, setLine] = useState<string | null>(null);
   const firedLines = useRef(new Set<string>());
   const [mode, setModeState] = useState<Mode>(loadMode);
+  const [level, setLevelState] = useState<Level>(loadLevel);
+  const setLevel = (l: Level) => {
+    setLevelState(l);
+    saveLevel(l);
+  };
+  // Did's tested plan for the rocket as it is now, and how many things it listed after the last flight.
+  const [plan, setPlan] = useState<PlanState | undefined>();
+  const shownCount = useRef<number | undefined>(undefined);
+  const [prevCount, setPrevCount] = useState<number | undefined>();
+  // Easy: what the Chief Engineer changed on dials that are not on screen.
+  const [careNotes, setCareNotes] = useState<string[]>([]);
+  const careCount = useRef(0);
+  const caredSpec = useRef<RocketSpec | null>(null);
   const [presetId, setPresetId] = useState(presets[0].id);
   const [picking, setPicking] = useState(false);
   const [myRockets, setMyRockets] = useState<RocketSpec[]>(loadMyRockets);
-  const blank = useMemo(blankRocket, []);
+  // Easy starts "from scratch" with two stages, so the first rocket Roscoe builds can reach orbit.
+  const blank = useMemo(() => (level === 'easy' ? addStage(blankRocket(), catalog) : blankRocket()), [level]);
   const allRockets = useMemo(() => [blank, ...presets, ...myRockets], [blank, myRockets]);
   const preset = allRockets.find((p) => p.id === presetId) ?? presets[0];
   const [spec, setSpec] = useState<RocketSpec>(preset);
@@ -194,7 +211,14 @@ export default function App() {
   const inMission = screen === 'mission' && !!active;
   // Missions are played in Roscoe mode, with only the controls taught so far.
   const roscoe = mode === 'roscoe' || inMission;
-  const controls = useMemo(() => (inMission ? controlsFor(active!.id) : undefined), [inMission, active]);
+  // The level decides how many dials show. Engineer mode in the Sandbox always has them all.
+  const controls = useMemo(
+    () => (roscoe ? visibleControls(level, inMission ? active : null, progress.stars) : undefined),
+    [roscoe, level, inMission, active, progress.stars],
+  );
+  const slots = useMemo(() => (roscoe ? visibleSlots(level, inMission ? active : null) : undefined), [roscoe, level, inMission, active]);
+  const cared = useMemo(() => (roscoe ? caredFor(level, controls) : new Set<ControlId>()), [roscoe, level, controls]);
+  const levelStars = progress.levels[level];
   const fresh = useMemo(() => (inMission ? new Set<ControlId>(active!.unlocks) : undefined), [inMission, active]);
   const can = (c: ControlId) => !controls || controls.has(c);
   const base = inMission && missionStart ? missionStart : preset;
@@ -250,7 +274,9 @@ export default function App() {
     const g = goldenFor(presetId);
     return g ? scorecard(g, record) : undefined;
   }, [presetId, record]);
-  const pb = usePlayback(mission, mission.flightDurationS, 10);
+  // Easy skips the long waits at the end of a launch.
+  const flightEnd = useMemo(() => watchEndS(roscoe ? level : 'hard', mission), [roscoe, level, mission]);
+  const pb = usePlayback(mission, flightEnd, roscoe && level === 'easy' ? 30 : 10);
   const sample = sampleAt(record.samples, pb.t);
   const current: Run = useMemo(
     () => ({ id: 0, label: spec.name, color: RUN_COLORS[0], record }),
@@ -262,6 +288,7 @@ export default function App() {
     setPresetId(id);
     setSpec(p);
     setAutoMessage(null);
+    setCareNotes([]);
   };
 
   const startFromScratch = () => {
@@ -301,19 +328,51 @@ export default function App() {
     setPhase('ready');
     setDoneScene('flight');
     const failure = mission.result.failure;
+    if (spec !== caredSpec.current) careCount.current = 0;
     if (!failure) {
       setFix(undefined);
+      // The flight works; in a mission the goal may still be out of reach.
+      setPlan(inMission ? { status: 'done', plan: goalPlan({ steps: [], complete: true }) } : undefined);
       return;
     }
     let live = true;
     setFix({ status: 'working', fixes: [], tested: 0 });
-    findFixesAsync(spec, failure.type, failure.detail, faults).then((r) => {
-      if (live) setFix({ status: 'done', ...r });
+    setPlan({ status: 'working' });
+    // Easy: a failure that a hidden dial could prevent is the Chief Engineer's job, unless it
+    // is the very problem this mission is about.
+    const canCare = cared.size > 0 && careCount.current < 4 && CARE_FAILURES.includes(failure.type) && !(inMission && failure.type === expectedProblem);
+    findFixesAsync(spec, failure.type, failure.detail, faults, 12).then((r) => {
+      if (!live) return;
+      const care = canCare ? r.fixes.find((f) => f.control && cared.has(f.control)) : undefined;
+      if (care) {
+        careCount.current++;
+        caredSpec.current = care.spec;
+        setCareNotes((n) => (n.includes(care.roscoe) ? n : [...n, care.roscoe]));
+        setSpec(care.spec);
+        return;
+      }
+      setFix({ status: 'done', fixes: r.fixes.slice(0, 3), tested: r.tested });
+    });
+    planFixesAsync(spec, faults, controls ? [...controls] : undefined).then((p) => {
+      if (live) setPlan({ status: 'done', plan: goalPlan(p) });
     });
     return () => {
       live = false;
     };
   }, [mission]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** In a mission, a rocket that flies may still miss the goal: add the changes that reach it. */
+  const goalPlan = (p: Plan): Plan => {
+    if (!inMission || !p.complete) return p;
+    const m = active!;
+    const end = p.steps.length ? p.steps[p.steps.length - 1].spec : spec;
+    const wins = (s: RocketSpec, flown = flyMission(s, catalog, { faults: m.faults ?? [] })) => m.goal({ m: flown, spec: s, stats: NO_STATS });
+    if (end === spec ? wins(spec, mission) : wins(end)) return p;
+    const target = m.solve(end);
+    const extra = describeChanges(end, target).filter((c) => c.control && can(c.control));
+    if (!extra.length || !wins(target)) return { ...p, complete: false };
+    return { steps: [...p.steps, ...extra.map((c) => ({ roscoe: c.text, control: c.control, spec: target }))], complete: true };
+  };
 
   // The story after the launch: the Moon trip, then coming home.
   const finish = (scene: Scene) => {
@@ -331,8 +390,8 @@ export default function App() {
   const afterMoon = () => (mission.moon?.success && mission.reentry ? setPhase('reentry') : finish('moon'));
 
   useEffect(() => {
-    if (phase === 'flying' && !pb.playing && pb.t >= mission.flightDurationS) afterFlight();
-  }, [phase, pb.playing, pb.t, mission.flightDurationS]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (phase === 'flying' && !pb.playing && pb.t >= flightEnd) afterFlight();
+  }, [phase, pb.playing, pb.t, flightEnd]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startFlight = useCallback(() => {
     setPhase('flying');
@@ -348,6 +407,8 @@ export default function App() {
     setDidFix(null);
     setRival(lastFlown);
     setVerdict(null);
+    setPrevCount(shownCount.current);
+    setCareNotes([]);
     setPhase('countdown');
   };
 
@@ -422,6 +483,9 @@ export default function App() {
     setShowMe(null);
     setLine(null);
     setAutoMessage(null);
+    setCareNotes([]);
+    shownCount.current = undefined;
+    setPrevCount(undefined);
     pb.pause();
     pb.seek(0);
     setPhase('ready');
@@ -447,9 +511,9 @@ export default function App() {
     const won = active!.goal(ctx);
     const starChecks = active!.stars.map((g) => won && g.check(ctx));
     const earned = won ? 1 + starChecks.filter(Boolean).length : 0;
-    const best = Math.max(earned, progress.stars[active!.id] ?? 0);
-    if (won && best > (progress.stars[active!.id] ?? 0)) {
-      const next = { ...progress, stars: { ...progress.stars, [active!.id]: best } };
+    const best = Math.max(earned, levelStars[active!.id] ?? 0);
+    if (won && best > (levelStars[active!.id] ?? 0)) {
+      const next = withStars(progress, active!.id, level, best);
       setProgress(next);
       saveProgress(next);
     }
@@ -484,7 +548,7 @@ export default function App() {
     if (phase !== 'done' || judged.current === mission) return;
     judged.current = mission;
     if (roscoe) {
-      const v = judge(rival, { spec, mission }, guess);
+      const v = judge(rival, { spec, mission }, guess, cared);
       setVerdict(v);
       if (v.guess || v.kind === 'clean') {
         const next = recordLab(lab, v, inMission ? active!.title : 'Sandbox');
@@ -494,6 +558,8 @@ export default function App() {
     }
     setLastFlown({ spec, mission });
     setGuess(null);
+    // Remember how long Did's list was, to say next time whether it got shorter.
+    shownCount.current = plan?.status === 'done' && plan.plan?.steps.length ? plan.plan.steps.length : undefined;
   }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A changed rocket is a new try.
@@ -564,8 +630,8 @@ export default function App() {
 
   // The ghost flies along only when this rocket differs from the last one flown.
   const ghost = useMemo(
-    () => (roscoe && showGhost && rival && changesSince(rival.spec, spec).length ? { record: rival.mission.ascent, vehicle: buildVehicle(rival.spec, catalog) } : undefined),
-    [roscoe, showGhost, rival, spec],
+    () => (roscoe && showGhost && rival && changesSince(rival.spec, spec, cared).length ? { record: rival.mission.ascent, vehicle: buildVehicle(rival.spec, catalog) } : undefined),
+    [roscoe, showGhost, rival, spec, cared],
   );
   const labNote = roscoe ? <LabNote verdict={verdict} /> : null;
 
@@ -587,6 +653,10 @@ export default function App() {
   useEffect(() => {
     if (!speeds.includes(pb.speed)) pb.setSpeed(10);
   }, [roscoe]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Easy flies fast unless Roscoe slows it down.
+  useEffect(() => {
+    if (roscoe) pb.setSpeed(level === 'easy' ? 30 : 10);
+  }, [level]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tabs: { id: Tab; label: string }[] = [
     ...(can('build') ? [{ id: 'build' as Tab, label: roscoe ? '🔧 Build' : 'Build' }] : []),
@@ -595,9 +665,19 @@ export default function App() {
   ];
 
   if (screen === 'home')
-    return <Home progress={progress} onMissions={() => setScreen('map')} onSandbox={goSandbox} onSkills={() => setScreen('skills')} onDetective={() => setScreen('detective')} />;
+    return (
+      <Home
+        progress={progress}
+        level={level}
+        onLevel={setLevel}
+        onMissions={() => setScreen('map')}
+        onSandbox={goSandbox}
+        onSkills={() => setScreen('skills')}
+        onDetective={() => setScreen('detective')}
+      />
+    );
   if (screen === 'detective') return <Detective onHome={() => setScreen('home')} />;
-  if (screen === 'map') return <MissionMap progress={progress} onPlay={startMission} onHome={() => setScreen('home')} />;
+  if (screen === 'map') return <MissionMap progress={progress} level={level} onPlay={startMission} onHome={() => setScreen('home')} />;
   if (screen === 'skills') return <SkillBook progress={progress} lab={lab} onBack={() => setScreen('home')} />;
 
 
@@ -617,20 +697,21 @@ export default function App() {
         : attempts >= 3
           ? 'This one is tricky! Want me to walk you through it?'
           : null;
-  const hint =
-    inMission && attempts > 0 && hintText ? (
-      <div className="lesson-hint">
-        <Did size={56} />
-        <div>
-          <b>Flight Director Did:</b> {hintText}
-          {attempts >= 3 && (
-            <button className="btn small primary" onClick={startWalkthrough}>
-              🧭 Walk me through it
-            </button>
-          )}
-        </div>
-      </div>
-    ) : null;
+  // Did's clue: the tested plan for this rocket, or the mission's own hint when there is none.
+  const fallbackHint = inMission && attempts > 0 ? hintText : null;
+  const hasClue = plan?.status === 'working' || (plan?.plan?.steps.length ?? 0) > 0 || !!fallbackHint || (inMission && attempts >= 2);
+  const hint = roscoe && hasClue ? (
+    <Clue
+      plan={plan}
+      level={level}
+      attempts={inMission ? attempts : 2}
+      prevCount={prevCount}
+      fallback={fallbackHint}
+      onShowMe={onShowMe}
+      onWalk={inMission ? startWalkthrough : undefined}
+    />
+  ) : null;
+  const planFix = plan?.status === 'done' ? plan.plan?.steps[0]?.fix : undefined;
 
   return (
     <div className={`app ${mode} ${inMission ? 'in-mission' : ''}`}>
@@ -781,9 +862,16 @@ export default function App() {
               </div>
             </div>
           )}
-          {roscoe && !inMission && <PartsBox spec={spec} setSpec={setSpec} rockets={[...presets.filter((p) => p.id !== 'a1-39-as-drawn'), ...myRockets]} />}
+          {roscoe && careNotes.length > 0 && (
+            <div className="care-note" role="status">
+              <b>🤖 The Chief Engineer looked after the rest:</b> {careNotes.map((n) => n.replace(/[.!]$/, '').toLowerCase()).join('; ')}. You can do that yourself on Medium.
+            </div>
+          )}
+          {roscoe && !inMission && (
+            <PartsBox key={level} spec={spec} setSpec={setSpec} rockets={[...presets.filter((p) => p.id !== 'a1-39-as-drawn'), ...myRockets]} startOpen={level !== 'easy'} />
+          )}
           {inMission && (
-            <MissionCard mission={active!} spec={spec} liftoffTWR={record.summary.liftoffTWR} best={progress.stars[active!.id] ?? 0} lastTry={lastTry} />
+            <MissionCard mission={active!} spec={spec} liftoffTWR={record.summary.liftoffTWR} best={levelStars[active!.id] ?? 0} lastTry={lastTry} />
           )}
           {roscoe ? (
             <RoscoeBuilder
@@ -802,7 +890,10 @@ export default function App() {
               controls={controls}
               fresh={fresh}
               changed={didFix ? new Set(didFix.changes.flatMap((c) => (c.control ? [c.control] : []))) : undefined}
-              unlimited={!inMission}
+              unlimited={!inMission && level !== 'easy'}
+              liftoffMassKg={record.summary.liftoffMassKg}
+              explain={level !== 'hard'}
+              slots={slots}
             />
           ) : (
             <EngineerBuilder
@@ -904,11 +995,13 @@ export default function App() {
             {phase === 'ready' && (
               <div className="launch-wrap">
                 {/* Not on a mission's first launch while Did is still showing the ropes. */}
-                {roscoe && !briefing && !(inMission && !lastFlown && coachSteps.length > 0) && <CallIt last={lastFlown} spec={spec} guess={guess} setGuess={setGuess} showGhost={showGhost} setShowGhost={setShowGhost} />}
+                {roscoe && !briefing && !(inMission && !lastFlown && coachSteps.length > 0) && (
+                  <CallIt last={lastFlown} spec={spec} guess={guess} setGuess={setGuess} showGhost={showGhost} setShowGhost={setShowGhost} ignore={cared} />
+                )}
                 <button className="launch-btn" data-coach="launch" onClick={launch}>
                   LAUNCH
                 </button>
-                {chaos && <div className="chaos-note">🎲 Chaos Mode is on: something might go wrong!</div>}
+                {chaosOn && <div className="chaos-note">🎲 Chaos Mode is on: something might go wrong!</div>}
               </div>
             )}
 
@@ -940,11 +1033,6 @@ export default function App() {
                 {labNote}
                 {hint}
                 <div className="result-actions">
-                  {!hint && (
-                    <button className="btn big" onClick={() => onShowMe(active!.hintControl)}>
-                      👉 Show me
-                    </button>
-                  )}
                   <button className="btn big primary" onClick={again}>
                     🚀 Fly again
                   </button>
@@ -964,6 +1052,8 @@ export default function App() {
                 hint={hint}
                 note={inMission ? tryNote : null}
                 lab={labNote}
+                level={level}
+                planFix={planFix}
               />
             )}
             {phase === 'done' && roscoe && !inMission && !lesson && (
@@ -976,6 +1066,8 @@ export default function App() {
                 onTryFix={tryFix}
                 badge={realFlight && <ScorecardBadge card={realFlight} modified={modified} />}
                 lab={labNote}
+                hint={hint}
+                noAutoFix={level === 'hard'}
               />
             )}
 
@@ -1006,7 +1098,7 @@ export default function App() {
                   className="scrubber"
                   type="range"
                   min={0}
-                  max={mission.flightDurationS}
+                  max={flightEnd}
                   step={0.1}
                   value={pb.t}
                   onChange={(e) => {
@@ -1016,6 +1108,11 @@ export default function App() {
                   aria-label="Flight time"
                 />
                 {!roscoe && <span className="mono time">T+{pb.t.toFixed(0)} s</span>}
+                {roscoe && phase === 'flying' && (
+                  <button className="btn skip-end" onClick={() => pb.seek(flightEnd)}>
+                    ⏭ Skip
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -1049,7 +1146,7 @@ export default function App() {
       {inMission && briefing && (
         <Briefing
           mission={active!}
-          best={progress.stars[active!.id] ?? 0}
+          best={levelStars[active!.id] ?? 0}
           onBack={leaveMission}
           onGo={() => {
             setBriefing(false);

@@ -3,10 +3,16 @@
 import { catalog } from '../data/catalog';
 import { autoSize } from '../physics/autosize';
 import { findFixes } from '../physics/fixes';
+import { planFixes } from '../physics/plan';
 import type { WorkerRequest } from './whatIf';
 
 self.onmessage = (e: MessageEvent<WorkerRequest>) => {
   const req = e.data;
-  const result = req.kind === 'autosize' ? autoSize(req.spec, catalog) : findFixes(req.spec, catalog, req.failureType, 3, req.detail, req.faults);
+  const result =
+    req.kind === 'autosize'
+      ? autoSize(req.spec, catalog)
+      : req.kind === 'plan'
+        ? planFixes(req.spec, catalog, req.faults, req.allowed)
+        : findFixes(req.spec, catalog, req.failureType, req.limit ?? 3, req.detail, req.faults);
   self.postMessage({ id: req.id, result });
 };

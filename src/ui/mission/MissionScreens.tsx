@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Lab } from '../lab';
+import { LEVELS, type Level } from '../../missions/level';
 import { CONTROL_INFO } from '../../missions/controlInfo';
 import { CHAPTERS, MISSIONS } from '../../missions/missions';
 import { learnedSkills, rank, totalStars, upNext, type Progress } from '../../missions/progress';
@@ -39,8 +40,12 @@ export function Home({
   onSandbox,
   onSkills,
   onDetective,
+  level,
+  onLevel,
 }: {
   progress: Progress;
+  level: Level;
+  onLevel: (l: Level) => void;
   onMissions: () => void;
   onSandbox: () => void;
   onSkills: () => void;
@@ -71,6 +76,16 @@ export function Home({
         <button className="sq-small" onClick={onSkills}>
           📖 Skill Book
         </button>
+        <div className="sq-level" role="group" aria-label="Level">
+          <div className="sq-level-picks">
+            {LEVELS.map((l) => (
+              <button key={l.id} className={level === l.id ? 'on' : ''} aria-pressed={level === l.id} onClick={() => onLevel(l.id)}>
+                {l.emoji} {l.label}
+              </button>
+            ))}
+          </div>
+          <small>{LEVELS.find((l) => l.id === level)!.blurb}</small>
+        </div>
       </div>
     </div>
   );
@@ -78,7 +93,8 @@ export function Home({
 
 // ---------- Mission map ----------
 
-export function MissionMap({ progress, onPlay, onHome }: { progress: Progress; onPlay: (m: Mission) => void; onHome: () => void }) {
+export function MissionMap({ progress, level, onPlay, onHome }: { progress: Progress; level: Level; onPlay: (m: Mission) => void; onHome: () => void }) {
+  const lv = LEVELS.find((l) => l.id === level)!;
   const next = upNext(progress);
   return (
     <div className="sq-screen sq-map">
@@ -88,7 +104,7 @@ export function MissionMap({ progress, onPlay, onHome }: { progress: Progress; o
         </button>
         <img src={LOGO} alt="Space Q" className="sq-logo small" />
         <span className="sq-cadet">
-          {rank(progress)} Roscoe · {totalStars(progress)} ★
+          {rank(progress)} Roscoe · {totalStars(progress)} ★ · {lv.emoji} {lv.label}
         </span>
       </div>
       {CHAPTERS.map((ch) => (
@@ -99,9 +115,9 @@ export function MissionMap({ progress, onPlay, onHome }: { progress: Progress; o
           <div className="sq-tiles">
             {MISSIONS.filter((m) => m.chapter === ch.n).map((m) => {
               const i = MISSIONS.indexOf(m);
-              const stars = progress.stars[m.id] ?? 0;
+              const stars = progress.levels[level][m.id] ?? 0;
               return (
-                <button key={m.id} className={`sq-tile ${stars ? 'done' : ''} ${i === next ? 'next' : ''}`} onClick={() => onPlay(m)}>
+                <button key={m.id} className={`sq-tile ${progress.stars[m.id] ? 'done' : ''} ${i === next ? 'next' : ''}`} onClick={() => onPlay(m)}>
                   <span className="sq-tile-n">{i + 1}</span>
                   {i === next && <span className="sq-tile-next">▶ Up next</span>}
                   <span className="sq-patch">{m.patch}</span>

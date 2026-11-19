@@ -31,10 +31,12 @@ interface Props {
   setSpec: (s: RocketSpec) => void;
   /** Rockets to take parts from: the real ones and Roscoe's own. */
   rockets: RocketSpec[];
+  /** Easy starts with the box shut, so the Build screen opens on the few big dials. */
+  startOpen?: boolean;
 }
 
-export function PartsBox({ spec, setSpec, rockets }: Props) {
-  const [open, setOpen] = useState(true);
+export function PartsBox({ spec, setSpec, rockets, startOpen = true }: Props) {
+  const [open, setOpen] = useState(startOpen);
   const [fromId, setFromId] = useState(rockets[0]?.id);
   const [piece, setPiece] = useState<Piece | null>(null);
   const [note, setNote] = useState<string | null>(null);

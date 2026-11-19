@@ -38,7 +38,7 @@ describe('Mission Mode, Chapters 1–5', () => {
   });
 
   it('marks the first mission without a star as up next, and finishing a chapter raises the rank', () => {
-    const p = { stars: {} as Record<string, number> };
+    const p = { stars: {} as Record<string, number>, levels: { easy: {}, medium: {}, hard: {} } };
     expect(upNext(p)).toBe(0);
     p.stars[MISSIONS[0].id] = 1;
     expect(upNext(p)).toBe(1);

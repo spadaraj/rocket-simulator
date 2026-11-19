@@ -3528,3 +3528,107 @@ button.brand {
     flex: 1;
   }
 }
+
+/* ---------- Easy / Medium / Hard ---------- */
+.sq-level {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  border: 3px solid var(--sq-ink);
+  background: rgba(255, 248, 230, 0.92);
+  color: var(--sq-ink);
+  font-family: var(--font-fun);
+}
+
+.sq-level-picks {
+  display: flex;
+  gap: 6px;
+}
+
+.sq-level-picks button {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 12px;
+  border: 2px solid var(--sq-ink);
+  background: #fff;
+  color: var(--sq-ink);
+  font: 800 15px var(--font-fun);
+  white-space: nowrap;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.sq-level-picks button.on {
+  background: var(--sq-ink);
+  color: #fff8e6;
+}
+
+.sq-level small {
+  font-size: 14px;
+  text-align: center;
+}
+
+/* What a dial is for, and what the last tap on it did. */
+.rb-explain {
+  flex-basis: 100%;
+  font-size: 14.5px;
+  line-height: 1.35;
+  color: var(--ink-dim);
+}
+
+.rb-effect {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 176, 46, 0.16);
+  border: 1px solid var(--amber);
+  font-family: var(--font-fun);
+  font-size: 15.5px;
+  animation: pop 0.25s ease-out;
+}
+
+.care-note {
+  margin: 0 auto 10px;
+  width: min(900px, 100%);
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 2px dashed rgba(255, 255, 255, 0.35);
+  font-family: var(--font-fun);
+  font-size: 16px;
+}
+
+.lesson-hint.clue {
+  align-items: flex-start;
+}
+
+.lesson-hint.clue p {
+  margin: 4px 0;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.lesson-hint.clue small {
+  display: block;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.clue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.clue-actions .btn {
+  color: #fff;
+}
+
+.skip-end {
+  white-space: nowrap;
+}

@@ -3,6 +3,8 @@
 import { catalog } from '../data/catalog';
 import { autoSize, type AutoSizeResult } from '../physics/autosize';
 import { findFixes, type FixResult } from '../physics/fixes';
+import type { ControlId } from '../physics/controls';
+import { planFixes, type Plan } from '../physics/plan';
 import type { Fault, MissionFailureType, RocketSpec } from '../physics/types';
 
 export type WorkerRequest =
@@ -14,7 +16,9 @@ export type WorkerRequest =
       failureType: MissionFailureType;
       detail: Record<string, number | string>;
       faults: Fault[];
-    };
+      limit?: number;
+    }
+  | { id: number; kind: 'plan'; spec: RocketSpec; faults: Fault[]; allowed?: ControlId[] };
 
 type Pending = (result: unknown) => void;
 /** Omit that distributes over the union. */
@@ -60,6 +64,12 @@ export function findFixesAsync(
   failureType: MissionFailureType,
   detail: Record<string, number | string>,
   faults: Fault[],
+  limit = 3,
 ): Promise<{ fixes: FixResult[]; tested: number }> {
-  return run({ kind: 'fixes', spec, failureType, detail, faults }, () => findFixes(spec, catalog, failureType, 3, detail, faults));
+  return run({ kind: 'fixes', spec, failureType, detail, faults, limit }, () => findFixes(spec, catalog, failureType, limit, detail, faults));
+}
+
+/** Every change it takes to make this rocket fly, using only the allowed controls. */
+export function planFixesAsync(spec: RocketSpec, faults: Fault[], allowed?: ControlId[]): Promise<Plan> {
+  return run({ kind: 'plan', spec, faults, allowed }, () => planFixes(spec, catalog, faults, allowed));
 }
