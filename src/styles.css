@@ -3632,3 +3632,133 @@ button.brand {
 .skip-end {
   white-space: nowrap;
 }
+
+/* ---------- The failure card: what went wrong, what to do, why if asked ---------- */
+.result-card.fail-card {
+  /* Solid, so the gauges behind it don't show through the words. */
+  background: var(--bp-deep);
+  text-align: left;
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  padding: 18px 22px;
+  z-index: 15;
+}
+
+.fail-kicker {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--red);
+}
+
+.result-card.fail-card h2 {
+  margin: 4px 0 10px;
+  font-size: 25px;
+  line-height: 1.25;
+}
+
+.fail-compare {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 16px;
+  background: rgba(255, 255, 255, 0.07);
+  border-left: 5px solid var(--ink-dim);
+}
+
+.fail-compare.good {
+  border-left-color: #4cd480;
+}
+
+.fail-compare.bad {
+  border-left-color: var(--red);
+}
+
+.fail-compare p {
+  margin: 0;
+}
+
+.fail-compare p + p {
+  margin-top: 4px;
+}
+
+.fail-card .lesson-hint.clue {
+  margin: 14px 0 6px;
+  padding: 14px 16px;
+  border: 3px solid var(--sq-orange);
+  box-shadow: 0 6px 0 rgba(158, 59, 34, 0.5);
+}
+
+.fail-card .lesson-hint.clue b {
+  font-size: 19px;
+}
+
+.fail-card .lesson-hint.clue p {
+  font-size: 22px;
+  margin: 2px 0 4px;
+}
+
+.fail-card .clue-actions {
+  margin-top: 10px;
+  align-items: center;
+}
+
+.fail-card .clue-actions .btn.big {
+  margin-top: 0;
+}
+
+.fail-why {
+  margin-top: 10px;
+}
+
+.fail-why-toggle {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: var(--ink);
+  font: 700 17px var(--font-fun);
+  text-align: left;
+  cursor: pointer;
+}
+
+.fail-why-body {
+  padding: 4px 4px 0;
+  font-size: 16.5px;
+}
+
+.fail-why-body p {
+  margin: 6px 0;
+}
+
+.fail-ideas {
+  margin: 4px 0 8px;
+  padding-left: 22px;
+}
+
+.fail-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  margin-top: 12px;
+}
+
+.fail-links .link {
+  min-height: 40px;
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  color: var(--ink-dim);
+  font: 600 15.5px var(--font-fun);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* Room for the limit label that hangs under the bar. */
+.fail-card .lesson-meter {
+  margin-bottom: 28px;
+}

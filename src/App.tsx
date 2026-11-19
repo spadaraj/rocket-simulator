@@ -28,7 +28,7 @@ import { RoscoeDials } from './ui/RoscoeDials';
 import { RaiseView } from './ui/RaiseView';
 import { fmtMeter, lessonFor, type Meter } from './ui/lessons';
 import { describeChanges, type Change } from './ui/changes';
-import { LessonCard, ProgressNote, type TryNote } from './ui/ResultCard';
+import { type TryNote } from './ui/ResultCard';
 import { Coach } from './ui/mission/Coach';
 import { Did } from './ui/mission/Characters';
 import { Briefing, Debrief, Home, MissionMap, SkillBook } from './ui/mission/MissionScreens';
@@ -40,7 +40,8 @@ import { introSteps } from './missions/intro';
 import { MISSIONS } from './missions/missions';
 import { loadProgress, saveProgress, withStars, type Progress } from './missions/progress';
 import { CARE_FAILURES, caredFor, loadLevel, saveLevel, visibleControls, visibleSlots, watchEndS, type Level } from './missions/level';
-import { Clue, type PlanState } from './ui/mission/Clue';
+import { Clue, clueText, type PlanState } from './ui/mission/Clue';
+import { FailCard } from './ui/FailCard';
 import type { Plan } from './physics/plan';
 import type { CoachContext, Mission, PlayStats } from './missions/types';
 import type { ControlId } from './physics/controls';
@@ -617,6 +618,11 @@ export default function App() {
     onShowMe(m.hintControl);
   };
 
+  const goBuild = () => {
+    again();
+    setTab('build');
+  };
+
   const onShowMe = (c: ControlId) => {
     const info = CONTROL_INFO[c];
     if (info.tab === 'build') {
@@ -708,10 +714,37 @@ export default function App() {
       prevCount={prevCount}
       fallback={fallbackHint}
       onShowMe={onShowMe}
+      onBuild={goBuild}
       onWalk={inMission ? startWalkthrough : undefined}
     />
   ) : null;
   const planFix = plan?.status === 'done' ? plan.plan?.steps[0]?.fix : undefined;
+  const clueSay = (() => {
+    const p = plan?.status === 'done' ? plan.plan : undefined;
+    if (!p?.steps.length) return hintText ?? undefined;
+    const c = clueText(p, level, prevCount);
+    return [c.count, c.first].filter(Boolean).join(' ');
+  })();
+  // "Let Did fix it": the first tested step, or the best tested fix (never on Hard).
+  const letDidFix = level === 'hard' ? undefined : (planFix ?? (fix?.status === 'done' ? fix.fixes.find((f) => !controls || (f.control && controls.has(f.control))) : undefined));
+  const ideas = level === 'easy' || !lesson ? undefined : lesson.fixes.filter((f) => !controls || controls.has(f.control)).map((f) => f.text);
+  const failCard = (headline: string, failure: Parameters<typeof FailCard>[0]['failure']) => (
+    <FailCard
+      failure={failure}
+      headline={headline}
+      lesson={lesson}
+      note={inMission ? tryNote : null}
+      verdict={verdict}
+      clue={hint}
+      say={clueSay}
+      steps={mission.result.steps}
+      ideas={ideas}
+      onBuild={goBuild}
+      onAgain={again}
+      onLetDid={letDidFix ? () => tryFix(letDidFix) : undefined}
+      replays={replays}
+    />
+  );
 
   return (
     <div className={`app ${mode} ${inMission ? 'in-mission' : ''}`}>
@@ -1020,43 +1053,13 @@ export default function App() {
                 lab={labNote}
               />
             )}
-            {phase === 'done' && inMission && outcome && !outcome.won && !lesson && (
-              <div className="result-card roscoe lose lesson">
-                <div className="lesson-head">
-                  <Did size={84} />
-                  <div>
-                    <div className="result-kicker">Almost!</div>
-                    <h2>The flight went fine, but the mission was: {active!.goalText}.</h2>
-                  </div>
-                </div>
-                {tryNote && <ProgressNote note={tryNote} />}
-                {labNote}
-                {hint}
-                <div className="result-actions">
-                  <button className="btn big primary" onClick={again}>
-                    🚀 Fly again
-                  </button>
-                </div>
-              </div>
-            )}
-            {phase === 'done' && roscoe && lesson && (!inMission || outcome) && (
-              <LessonCard
-                lesson={lesson}
-                fix={fix}
-                steps={mission.result.steps}
-                replays={replays}
-                onAgain={again}
-                onTryFix={tryFix}
-                onShowMe={onShowMe}
-                controls={controls}
-                hint={hint}
-                note={inMission ? tryNote : null}
-                lab={labNote}
-                level={level}
-                planFix={planFix}
-              />
-            )}
-            {phase === 'done' && roscoe && !inMission && !lesson && (
+            {/* A failed flight, or a mission goal missed: one simple card. */}
+            {phase === 'done' && roscoe && (inMission ? outcome && !outcome.won : !!mission.result.failure) &&
+              failCard(
+                lesson ? lesson.what : inMission ? `The flight worked, but the mission was: ${active!.goalText}.` : feedback.roscoeTitle,
+                mission.result.failure?.type ?? 'goal',
+              )}
+            {phase === 'done' && roscoe && !inMission && !mission.result.failure && (
               <RoscoeResult
                 fb={feedback}
                 fix={fix}
@@ -1066,8 +1069,6 @@ export default function App() {
                 onTryFix={tryFix}
                 badge={realFlight && <ScorecardBadge card={realFlight} modified={modified} />}
                 lab={labNote}
-                hint={hint}
-                noAutoFix={level === 'hard'}
               />
             )}
 

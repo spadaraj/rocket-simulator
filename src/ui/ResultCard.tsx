@@ -1,13 +1,9 @@
 import type { ReactNode } from 'react';
 import type { FixResult } from '../physics/fixes';
 import type { MissionStep } from '../physics/mission';
-import type { ControlId } from '../physics/controls';
-import type { Level } from '../missions/level';
-import { SKILLS } from '../missions/skills';
 import type { Change } from './changes';
-import { fmtMeter, meterBetter, type Lesson, type Meter } from './lessons';
+import { fmtMeter, type Meter } from './lessons';
 import type { Feedback } from './messages';
-import { Engineer } from './mission/Characters';
 import { canSpeak, speak } from './speech';
 
 export interface FixState {
@@ -58,7 +54,7 @@ interface CardProps {
 const STEP_ICON: Record<MissionStep['id'], string> = { ascent: '🚀', systems: '🎧', recovery: '🪂', raise: '🛰️', moon: '🌕', planet: '🪐', reentry: '🔥' };
 const STATUS_ICON: Record<MissionStep['status'], string> = { ok: '✅', fail: '❌', warn: '⚠️', skipped: '➖' };
 
-function Steps({ steps, roscoe }: { steps: MissionStep[]; roscoe: boolean }) {
+export function Steps({ steps, roscoe }: { steps: MissionStep[]; roscoe: boolean }) {
   return (
     <ul className={`mission-steps ${roscoe ? 'roscoe' : ''}`}>
       {steps.map((s, i) => (
@@ -181,7 +177,7 @@ export function EngineerResult({ fb, fix, steps, replays, onAgain, onTryFix }: C
 
 // ---------- Failures that teach ----------
 
-function MeterBar({ meter, before }: { meter: Meter; before?: number }) {
+export function MeterBar({ meter, before }: { meter: Meter; before?: number }) {
   const top = Math.max(meter.value, meter.limit, before ?? 0) * 1.15 || 1;
   const bad = meter.want === 'below' ? meter.value > meter.limit : meter.value < meter.limit;
   return (
@@ -219,151 +215,4 @@ export interface TryNote {
   prevWhat: string;
   /** Last time's reading on the same meter. */
   before?: number;
-}
-
-export function ProgressNote({ note, meter }: { note: TryNote; meter?: Meter }) {
-  if (!note.changes.length)
-    return (
-      <div className="lesson-progress same">
-        🔁 That was the same rocket as last time, so the same thing happened. Change something in Build first!
-      </div>
-    );
-  const changed = note.changes.slice(0, 3).map((c) => c.text).join(' · ');
-  if (!note.same)
-    return (
-      <div className="lesson-progress better">
-        <b>🎉 Your change worked!</b> Last time: {note.prevWhat.replace(/[.!]$/, '').toLowerCase()}. That’s fixed now. But there’s a new problem to solve:
-        <small>You changed: {changed}</small>
-      </div>
-    );
-  const moved = meter && note.before !== undefined ? meterBetter(meter, note.before) : undefined;
-  const reading =
-    meter && note.before !== undefined ? (
-      <>
-        {' '}
-        {meter.label}: {fmtMeter(meter, note.before)} → <b>{fmtMeter(meter)}</b> ({meter.limitLabel} {fmtMeter(meter, meter.limit)}).
-      </>
-    ) : null;
-  return (
-    <div className={`lesson-progress ${moved ? 'closer' : 'same'}`}>
-      <b>{moved === undefined ? '🤔 Same problem as last time.' : moved ? '📈 Getting closer!' : '📉 That went the wrong way.'}</b>
-      {reading}{' '}
-      {moved
-        ? 'Keep going: a bit more of the same change, or add one of the fixes below.'
-        : moved === false
-          ? 'Try changing it the other way, or pick a different fix below.'
-          : 'That change didn’t fix this one. Try a fix from the list below.'}
-      <small>You changed: {changed}</small>
-    </div>
-  );
-}
-
-interface LessonProps {
-  lesson: Lesson;
-  fix?: FixState;
-  steps: MissionStep[];
-  replays: { label: string; onClick: () => void }[];
-  onAgain: () => void;
-  onTryFix: (f: FixResult) => void;
-  onShowMe: (c: ControlId) => void;
-  /** Mission Mode: only fixes using these controls are offered. */
-  controls?: Set<ControlId>;
-  /** Mission Mode: Did's hint for this try, if any. */
-  hint?: ReactNode;
-  /** How this try compares with the last one. */
-  note?: TryNote | null;
-  /** Ghost and Guess: how the experiment came out. */
-  lab?: ReactNode;
-  level: Level;
-  /** The first step of Did's tested plan, for "Let Did fix it". */
-  planFix?: FixResult;
-}
-
-export function LessonCard({ lesson, fix, steps, replays, onAgain, onTryFix, onShowMe, controls, hint, note, lab, level, planFix }: LessonProps) {
-  const allowed = (c?: ControlId) => !controls || (!!c && controls.has(c));
-  const working = fix?.status === 'done' ? fix.fixes.filter((f) => allowed(f.control)) : [];
-  const testedFor = (c: ControlId) => working.find((f) => f.control === c);
-  // Fixes Did has tried and seen work go first.
-  const fixes = lesson.fixes.filter((f) => allowed(f.control)).sort((a, b) => Number(!!testedFor(b.control)) - Number(!!testedFor(a.control)));
-  // Hard: Roscoe makes every fix himself.
-  const tested = level === 'hard' ? undefined : (planFix ?? working[0]);
-  const skill = SKILLS[lesson.skill];
-  const readAloud = `${lesson.what} ${lesson.why.join(' ')} ${lesson.analogy ?? ''}${level === 'easy' ? '' : ` How to fix it: ${fixes.map((f) => f.text).join(' ')}`}`;
-  return (
-    <div className="result-card roscoe lose lesson">
-      <div className="lesson-head">
-        <Engineer size={110} mood="oops" />
-        <div>
-          <div className="result-kicker">What happened</div>
-          <h2>{lesson.what}</h2>
-        </div>
-      </div>
-      {note && <ProgressNote note={note} meter={lesson.meter} />}
-      {lab}
-      {lesson.meter && <MeterBar meter={lesson.meter} before={note?.same && note.changes.length ? note.before : undefined} />}
-      <div className="lesson-why">
-        <div className="result-kicker">🔬 Why</div>
-        {lesson.why.map((w) => (
-          <p key={w}>{w}</p>
-        ))}
-      </div>
-      <div className="lesson-rule">
-        <div className="result-kicker">
-          📐 Engineer’s rule: {skill.emoji} {skill.title}
-        </div>
-        {lesson.analogy && <p>{lesson.analogy}</p>}
-      </div>
-      {hint}
-      {/* Easy: Did's tested clue is the one thing to try, not a list to choose from. */}
-      {level !== 'easy' && (
-      <div className="lesson-fixes">
-        <div className="result-kicker">🔧 How you can fix it</div>
-        <ul>
-          {fixes.map((f) => {
-            const t = testedFor(f.control);
-            return (
-              <li key={f.text} className={t ? 'tested' : ''}>
-                <span>
-                  {f.text}
-                  {t && <small className="lesson-tested">✅ Did tried it and it works: {t.roscoe.toLowerCase()}</small>}
-                </span>
-                {level !== 'hard' && (
-                  <button className="btn small" onClick={() => onShowMe(f.control)}>
-                    👉 Show me
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        {fix?.status === 'working' && <p className="lesson-testing">🔧 Did is testing fixes…</p>}
-      </div>
-      )}
-      {steps.length > 1 && <Steps steps={steps} roscoe />}
-      <div className="result-actions">
-        {canSpeak && (
-          <button className="btn big" onClick={() => speak(readAloud)} aria-label="Read aloud">
-            🔊 Read to me
-          </button>
-        )}
-        {tested && (
-          <button className="btn big" onClick={() => onTryFix(tested)} title={tested.roscoe}>
-            🧑‍🚀 Let Did fix it
-          </button>
-        )}
-        <button className="btn big primary" onClick={onAgain}>
-          🚀 Fly again
-        </button>
-      </div>
-      {replays.length > 1 && (
-        <div className="result-replays">
-          {replays.map((r) => (
-            <button key={r.label} className="btn small" onClick={r.onClick}>
-              {r.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }

@@ -43,18 +43,20 @@ interface Props {
   /** Said when there is no tested plan (the mission's own hint). */
   fallback?: string | null;
   onShowMe: (c: ControlId) => void;
+  /** Go to Build without pointing at anything. */
+  onBuild: () => void;
   /** Did walks through the whole fix, one change at a time. */
   onWalk?: () => void;
 }
 
-export function Clue({ plan, level, attempts, prevCount, fallback, onShowMe, onWalk }: Props) {
+export function Clue({ plan, level, attempts, prevCount, fallback, onShowMe, onBuild, onWalk }: Props) {
   const steps = plan?.plan?.steps ?? [];
   if (plan?.status === 'working')
     return (
       <div className="lesson-hint">
         <Did size={56} />
         <div>
-          <b>Flight Director Did:</b> I’m testing fixes on your rocket…
+          <b>Did:</b> I’m testing fixes on your rocket…
         </div>
       </div>
     );
@@ -62,37 +64,41 @@ export function Clue({ plan, level, attempts, prevCount, fallback, onShowMe, onW
   if (!steps.length) {
     if (!fallback && !walk) return null;
     return (
-      <div className="lesson-hint">
+      <div className="lesson-hint clue">
         <Did size={56} />
         <div>
-          <b>Flight Director Did:</b> {fallback ?? 'This one is tricky! Want me to walk you through it?'}
-          {walk && (
-            <button className="btn small primary" onClick={onWalk}>
-              🧭 Walk me through it
+          <b>Did:</b> {fallback ?? 'This one is tricky! Want me to walk you through it?'}
+          <div className="clue-actions">
+            <button className="btn big primary" onClick={onBuild}>
+              🔧 Go to Build
             </button>
-          )}
+            {walk && (
+              <button className="btn small" onClick={onWalk}>
+                🧭 Walk me through it
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
   }
   const { count, first } = clueText(plan!.plan!, level, prevCount);
   const control = steps[0].control;
-  const showMe = control && (level === 'easy' || (level === 'medium' && attempts >= 2));
+  // Easy (and Medium after a couple of tries): the button opens Build with the dial lit up.
+  const point = control && (level === 'easy' || (level === 'medium' && attempts >= 2));
   return (
     <div className="lesson-hint clue">
       <Did size={56} />
       <div>
-        <b>Flight Director Did: {count}</b>
+        <b>Did: {count}</b>
         {first ? <p>{first}</p> : <p>You have the dials. Which ones would fix it?</p>}
-        <small>🧪 I flew {steps.length === 1 ? 'this fix' : 'these fixes'} on your rocket, so I know {steps.length === 1 ? 'it works' : 'they work'}.</small>
+        <small>🧪 I flew {steps.length === 1 ? 'it' : 'them'} on your rocket. {steps.length === 1 ? 'It works' : 'They work'}.</small>
         <div className="clue-actions">
-          {showMe && (
-            <button className="btn small" onClick={() => onShowMe(control)}>
-              👉 Show me
-            </button>
-          )}
+          <button className="btn big primary" onClick={point ? () => onShowMe(control) : onBuild}>
+            🔧 Fix it in Build
+          </button>
           {walk && (
-            <button className="btn small primary" onClick={onWalk}>
+            <button className="btn small" onClick={onWalk}>
               🧭 Walk me through it
             </button>
           )}
